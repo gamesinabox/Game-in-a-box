@@ -1,6 +1,6 @@
 // Game In A Box — offline cache
 // Bump CACHE_NAME any time index.html changes, so the new version installs cleanly.
-const CACHE_NAME = "game-in-a-box-v13";
+const CACHE_NAME = "game-in-a-box-v15";
 const CORE_ASSETS = [
   "./index.html",
   "./manifest.json",
