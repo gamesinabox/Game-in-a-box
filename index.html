@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Game In A Box - Inventory & Packing Tool</title>
 
 <!-- PWA: installable on iPhone home screen, works offline -->
@@ -11,10 +11,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Game In A Box">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<!-- No external font/CDN links here on purpose: this app must render with zero network
+     requests so it works offline on a freshly-launched home-screen icon. -->
 <style>
   :root{
     --bg:#F5F1E8; --surface:#FFFEFB; --field-bg:#FBF8F1; --ink:#1C1B19; --muted:#75695C; --line:#E7DFCF;
@@ -37,6 +37,7 @@
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
+  html{background:var(--bg);}
   body{
     background:var(--bg); color:var(--ink);
     font-family:'IBM Plex Sans', system-ui, sans-serif;
@@ -44,7 +45,7 @@
     -webkit-font-smoothing:antialiased;
   }
   ::selection{ background:var(--accent); color:#fff; }
-  header{ padding:20px 18px 14px; border-bottom:1px solid var(--line); background:var(--surface); }
+  header{ padding:calc(20px + env(safe-area-inset-top, 0px)) 18px 14px; border-bottom:1px solid var(--line); background:var(--surface); }
   header h1{ margin:0 0 4px; font-size:1.2rem; letter-spacing:-0.01em; font-weight:700; }
   header p{ margin:0; color:var(--muted); font-size:0.8rem; line-height:1.4; }
 
@@ -59,15 +60,24 @@
     position:sticky; top:0; z-index:5; box-shadow:var(--sh-sm);
   }
   .search-row{display:flex; gap:8px;}
-  input[type="text"], input[type="number"], select{
-    font-family:inherit; font-size:0.92rem; padding:11px 13px;
+  input[type="text"], input[type="search"], input[type="number"], select{
+    font-family:inherit; font-size:16px; padding:11px 13px;
     border:1px solid var(--line); border-radius:var(--r-md); background:var(--field-bg); color:var(--ink);
     transition:border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+    -webkit-appearance:none; appearance:none;
   }
-  input[type="text"]:focus, input[type="number"]:focus, select:focus{
+  input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus, select:focus{
     outline:none; border-color:var(--accent-2); box-shadow:0 0 0 3px rgba(47,93,80,0.13);
   }
-  input[type="text"]{flex:1; min-width:0;}
+  input[type="text"], input[type="search"]{flex:1; min-width:0;}
+  textarea.paste-textarea{
+    font-family:inherit; font-size:16px; padding:11px 13px; width:100%; display:block;
+    border:1px solid var(--line); border-radius:var(--r-md); background:var(--field-bg); color:var(--ink);
+    resize:vertical; transition:border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  }
+  textarea.paste-textarea:focus{
+    outline:none; border-color:var(--accent-2); box-shadow:0 0 0 3px rgba(47,93,80,0.13);
+  }
   .filters{display:flex; gap:8px; flex-wrap:wrap;}
   .filters select{flex:1; min-width:100px;}
   .override-row{
@@ -75,7 +85,7 @@
     border:1px solid var(--line); border-radius:var(--r-md); padding:9px 11px;
   }
   .override-row label{font-size:0.76rem; color:var(--muted); flex:1; line-height:1.3;}
-  .override-row input[type="number"]{width:60px; text-align:center;}
+  .override-row input[type="number"]{width:66px; text-align:center;}
   .override-row .clear-override{
     background:none; border:none; color:var(--accent); font-size:0.74rem;
     text-decoration:underline; cursor:pointer; font-family:inherit; white-space:nowrap;
@@ -128,7 +138,7 @@
   .grading-info-body p{margin:8px 0;}
 
   .row-price{
-    font-family:'IBM Plex Mono', monospace; min-width:60px; text-align:right;
+    font-family:'IBM Plex Mono', ui-monospace, monospace; min-width:60px; text-align:right;
     background:none; border:none; padding:2px; cursor:pointer; border-radius:8px;
     transition:background 0.15s ease;
   }
@@ -151,8 +161,8 @@
   .edit-fields label{
     font-size:0.72rem; color:var(--muted); display:flex; align-items:center; gap:4px;
   }
-  .edit-fields input[type="number"]{width:64px; padding:6px 8px; font-size:0.85rem;}
-  .edit-fields select{padding:6px 8px; font-size:0.8rem; max-width:140px;}
+  .edit-fields input[type="number"]{width:70px; padding:6px 8px; font-size:16px;}
+  .edit-fields select{padding:6px 8px; font-size:16px; max-width:150px;}
   .edit-actions{display:flex; gap:8px; align-items:center;}
   .edit-save-btn, .edit-cancel-btn{
     width:32px; height:32px; border-radius:8px; border:none; font-size:1rem; cursor:pointer;
@@ -197,7 +207,7 @@
   }
   #storage-warning.show{display:block;}
 
-  #dup-toast{
+  #toast{
     position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom, 0px));
     transform:translateX(-50%) translateY(10px);
     background:var(--ink); color:#fff; font-size:0.82rem; line-height:1.3;
@@ -205,7 +215,7 @@
     max-width:88vw; text-align:center; z-index:70;
     opacity:0; pointer-events:none; transition:opacity 0.2s ease, transform 0.2s ease;
   }
-  #dup-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
   .add-btn, .pick-btn, .rm-btn{
     width:34px; height:34px; border-radius:var(--r-sm); border:none;
@@ -257,7 +267,7 @@
   }
   .cart-row .cr-title, .inv-row .cr-title{flex:1; font-size:0.86rem; font-weight:600;}
   .cart-row .cr-sub, .inv-row .cr-sub{font-size:0.7rem; color:var(--muted); margin-top:2px; display:flex; gap:4px; align-items:center; flex-wrap:wrap;}
-  .cart-row input[type="number"]{width:64px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600;}
+  .cart-row input[type="number"]{width:64px; text-align:right; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:600;}
 
   .summary-box{
     background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
@@ -265,7 +275,7 @@
   }
   .summary-line{display:flex; justify-content:space-between; font-size:0.88rem; margin-bottom:7px;}
   .summary-line.grand{
-    font-size:1.15rem; font-weight:700; font-family:'IBM Plex Mono',monospace;
+    font-size:1.15rem; font-weight:700; font-family:'IBM Plex Mono', ui-monospace, monospace;
     padding-top:10px; margin-top:5px; border-top:1px dashed var(--line);
   }
   .summary-line.margin-pos{color:var(--good);}
@@ -314,7 +324,7 @@
     flex:1; min-width:90px; background:var(--surface); border:1px solid var(--line);
     border-radius:var(--r-md); padding:10px 10px; text-align:center; box-shadow:var(--sh-sm);
   }
-  .stat-chip .stat-num{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:1.08rem;}
+  .stat-chip .stat-num{font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:700; font-size:1.08rem;}
   .stat-chip .stat-label{font-size:0.66rem; color:var(--muted); text-transform:uppercase; margin-top:3px; letter-spacing:0.01em;}
 
   #bottom-tabs{
@@ -330,10 +340,12 @@
     border-radius:calc(var(--r-lg) - 4px); transition:color 0.15s var(--ease), background 0.15s var(--ease);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  #bottom-tabs button .tab-icon{ font-size:1.05rem; line-height:1; }
+  #bottom-tabs button .tab-icon{ line-height:1; display:flex; transition:transform 0.15s var(--ease); }
+  #bottom-tabs button .tab-icon svg{ width:21px; height:21px; display:block; }
   #bottom-tabs button.active{color:#fff; background:rgba(255,255,255,0.1);}
+  #bottom-tabs button.active .tab-icon{ transform:translateY(-1px); }
   #bottom-tabs button .tab-badge{
-    font-family:'IBM Plex Mono',monospace; font-size:0.64rem; color:#9FD6AC;
+    font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:0.64rem; color:#9FD6AC;
   }
   .loading-note{ text-align:center; color:var(--muted); font-size:0.82rem; padding:30px; }
 </style>
@@ -342,9 +354,10 @@
 
 <header>
   <div class="brand-row">
-    <img src="icons/icon-192.png" alt="" class="brand-logo">
+    <img src="icon-192.png" alt="" class="brand-logo">
     <h1>Game In A Box</h1>
   </div>
+  <p id="offline-status" style="margin:2px 0 0; font-size:0.76rem; color:var(--muted);"></p>
   <div class="header-actions">
     <button id="export-data-btn">&#8681; Export backup</button>
     <label for="import-file-input">&#8679; Import backup
@@ -373,7 +386,7 @@
   </details>
 </header>
 <div id="storage-warning">&#9888; This browser is blocking saved data for locally-opened files, so changes won't persist after you close this tab. Try opening the file in Firefox, or use Export/Import to manually save your progress each session.</div>
-<div id="dup-toast"></div>
+<div id="toast"></div>
 
 <!-- DASHBOARD TAB -->
 <div class="tab-panel active" id="tab-dashboard">
@@ -405,7 +418,7 @@
 <div class="tab-panel" id="tab-buy">
   <div class="controls">
     <div class="search-row">
-      <input type="text" id="search" placeholder="Search title, console, or genre..." autocomplete="off">
+      <input type="search" id="search" placeholder="Search title, console, or genre..." autocomplete="off">
     </div>
     <div class="filters">
       <select id="console-filter"><option value="">All consoles</option></select>
@@ -449,6 +462,13 @@
 <!-- CART & QUOTES TAB -->
 <div class="tab-panel" id="tab-cart">
   <main>
+    <div class="section-title">Paste a list <span class="hint">one game per line, console at the end</span></div>
+    <div class="controls" style="position:static; border:1px solid var(--line); border-radius:10px; margin-bottom:14px;">
+      <textarea id="paste-list-input" rows="5" class="paste-textarea" placeholder="Fallout 4 PS4&#10;Elden Ring PS5&#10;Helldivers 2 PS5&#10;Call of Duty Black Ops 7 PS5"></textarea>
+      <button class="primary-btn" id="paste-list-btn" style="margin-top:8px;">Match &amp; add to cart</button>
+      <div id="paste-list-result"></div>
+    </div>
+
     <div class="section-title">Buying now <span class="hint">edit the price to match what you actually paid</span></div>
     <div id="cart-list"></div>
     <div class="summary-box" id="cart-summary" style="display:none">
@@ -480,11 +500,11 @@
   </div>
   <div style="overflow-y:auto; flex:1; padding:14px 18px;">
     <div class="section-title" style="margin-top:0;">To show your friend</div>
-    <pre id="quote-text-friend" style="white-space:pre-wrap; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; line-height:1.5; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px;"></pre>
+    <pre id="quote-text-friend" style="white-space:pre-wrap; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:0.8rem; line-height:1.5; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px;"></pre>
     <button class="primary-btn" id="copy-quote-friend-btn" style="margin-bottom:18px;">Copy to clipboard</button>
 
     <div class="section-title">To send the seller (Facebook, etc.)</div>
-    <pre id="quote-text-seller" style="white-space:pre-wrap; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; line-height:1.5; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px;"></pre>
+    <pre id="quote-text-seller" style="white-space:pre-wrap; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:0.8rem; line-height:1.5; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px;"></pre>
     <button class="primary-btn" id="copy-quote-seller-btn">Copy to clipboard</button>
   </div>
   <div style="padding:14px 18px 20px; border-top:1px dashed var(--line);">
@@ -496,7 +516,7 @@
 <div class="tab-panel" id="tab-inventory">
   <div class="controls">
     <div class="search-row">
-      <input type="text" id="inv-search" placeholder="Search your inventory..." autocomplete="off">
+      <input type="search" id="inv-search" placeholder="Search your inventory..." autocomplete="off">
     </div>
     <div class="filters">
       <select id="inv-console-filter"><option value="">All consoles</option></select>
@@ -516,7 +536,7 @@
       <summary class="custom-add-label">Sold Archive <span class="hint" id="sold-archive-count"></span></summary>
       <div class="stats-strip" id="sold-archive-stats" style="margin-top:10px;"></div>
       <div class="search-row" style="margin-top:10px;">
-        <input type="text" id="sold-search" placeholder="Search sold games..." autocomplete="off">
+        <input type="search" id="sold-search" placeholder="Search sold games..." autocomplete="off">
       </div>
       <div id="sold-archive-list" style="margin-top:10px;"></div>
     </details>
@@ -553,7 +573,7 @@
 
     <div class="controls" style="position:static; border:1px solid var(--line); border-radius:10px; margin-bottom:10px;">
       <div class="search-row">
-        <input type="text" id="pack-search" placeholder="Search inventory to fill slots..." autocomplete="off">
+        <input type="search" id="pack-search" placeholder="Search inventory to fill slots..." autocomplete="off">
       </div>
     </div>
     <div id="pack-pool"></div>
@@ -584,11 +604,11 @@
 </div>
 
 <nav id="bottom-tabs">
-  <button data-tab="dashboard" class="active"><span class="tab-icon">&#8962;</span>Home</button>
-  <button data-tab="buy"><span class="tab-icon">&#128269;</span>Buy</button>
-  <button data-tab="cart"><span class="tab-icon">&#128722;</span>Cart <span class="tab-badge" id="nav-cart-count">(0)</span></button>
-  <button data-tab="inventory"><span class="tab-icon">&#128230;</span>Stock <span class="tab-badge" id="nav-inv-count">(0)</span></button>
-  <button data-tab="pack"><span class="tab-icon">&#127873;</span>Pack</button>
+  <button data-tab="dashboard" class="active"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg></span>Home</button>
+  <button data-tab="buy"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.35-4.35"/></svg></span>Buy</button>
+  <button data-tab="cart"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2l2.2 10.6a1.5 1.5 0 0 0 1.47 1.2h7.9a1.5 1.5 0 0 0 1.47-1.18L20 8H6"/></svg></span>Cart <span class="tab-badge" id="nav-cart-count">(0)</span></button>
+  <button data-tab="inventory"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5"/><path d="M12 12v9"/></svg></span>Stock <span class="tab-badge" id="nav-inv-count">(0)</span></button>
+  <button data-tab="pack"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="10.5" rx="1"/><path d="M3.5 9h17"/><path d="M12 9v10.5"/><path d="M8 9c-1.5 0-2.6-1-2.6-2.2C5.4 5.5 6.4 4.5 7.6 4.5c1.8 0 3.4 2 4.4 4.5"/><path d="M16 9c1.5 0 2.6-1 2.6-2.2 0-1.3-1-2.3-2.2-2.3-1.8 0-3.4 2-4.4 4.5"/></svg></span>Pack</button>
 </nav>
 
 <script>
@@ -1018,14 +1038,14 @@ function importData(file){
         // Catalog update file - just adds new games, doesn't touch inventory/lots/etc.
         const result = mergeCatalogUpdate(data.games);
         renderResults();
-        alert('Catalog updated: ' + result.added + ' new games added' + (result.skipped ? ', ' + result.skipped + ' already present (skipped)' : '') + '.');
+        showToast('Catalog updated: ' + result.added + ' new games added' + (result.skipped ? ', ' + result.skipped + ' already present (skipped)' : '') + '.', 5000);
         return;
       }
       if (Array.isArray(data.items) && typeof data.name === 'string' && !data.inventory) {
         // A single saved-quote file, shared from another device
         const added = mergeSavedQuotes([data]);
         renderSavedQuotes();
-        alert(added ? ('Quote "' + data.name + '" imported - find it under Saved quotes.') : 'That quote was already saved.');
+        showToast(added ? ('Quote "' + data.name + '" imported - find it under Saved quotes.') : 'That quote was already saved.');
         return;
       }
 
@@ -1058,11 +1078,11 @@ function importData(file){
       }
 
       updateNavBadge(); renderResults(); renderCart(); renderInventoryTab(); renderCheckedStat(); renderSavedQuotes(); renderPackTab(); renderDashboardTab();
-      alert('Merged: ' + invResult.added + ' new inventory items, ' + invResult.updated + ' updated, ' +
+      showToast('Merged: ' + invResult.added + ' new inventory items, ' + invResult.updated + ' updated, ' +
             priceResult.applied + ' price updates applied (' + priceResult.kept + ' of yours kept as newer), ' +
-            lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes. Nothing was overwritten wholesale.');
+            lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes. Nothing was overwritten wholesale.', 6000);
     } catch(err) {
-      alert('Could not read that file - make sure it\'s a Game In A Box backup or catalog-update JSON.');
+      showToast('Could not read that file - make sure it\'s a Game In A Box backup or catalog-update JSON.', 5000);
     }
   };
   reader.readAsText(file);
@@ -1405,19 +1425,125 @@ function renderResults(){
 function inventoryCopiesOf(title){
   return inventory.filter(it => it.title === title).length;
 }
-let dupToastTimer = null;
-function showDuplicateWarning(title, count){
-  const el = document.getElementById('dup-toast');
-  el.textContent = `Already have ${count} cop${count === 1 ? 'y' : 'ies'} of "${title}" in stock`;
+let toastTimer = null;
+function showToast(message, duration){
+  const el = document.getElementById('toast');
+  el.textContent = message;
   el.classList.add('show');
-  clearTimeout(dupToastTimer);
-  dupToastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), duration || 3800);
+}
+function showDuplicateWarning(title, count){
+  showToast(`Already have ${count} cop${count === 1 ? 'y' : 'ies'} of "${title}" in stock`);
 }
 function addToCart(game){
   cart.push({tempId: uid(), console: game.console, genre: game.genre, title: game.title, tier: game.tier, filler: game.filler, aud: game.aud, price: buyPriceFor(game)});
   renderCart();
   const owned = inventoryCopiesOf(game.title);
   if (owned > 0) showDuplicateWarning(game.title, owned);
+}
+
+// ---------- Paste-a-list matching ----------
+// Recognises "<title> <console>" lines, e.g. "Elden Ring PS5", against the GAMES catalog
+// so a friend's/seller's list can be turned into a cart (and quote) without manual searching.
+const CONSOLE_ALIASES = {
+  'gameboy color':'GameBoy Color', 'gbc':'GameBoy Color', 'game boy color':'GameBoy Color',
+  'gameboy':'GameBoy', 'gb':'GameBoy', 'game boy':'GameBoy',
+  'gba':'GBA', 'gameboy advance':'GBA', 'game boy advance':'GBA',
+  'gamecube':'GameCube', 'gc':'GameCube', 'ngc':'GameCube',
+  'n64':'N64', 'nintendo 64':'N64',
+  'wii u':'Wii U', 'wiiu':'Wii U',
+  'switch 2':'Switch 2', 'switch2':'Switch 2', 'nsw2':'Switch 2',
+  'nds':'DS', 'nintendo ds':'DS',
+  '3ds':'3DS',
+  'psp':'PSP',
+  'ps vita':'PS Vita', 'psvita':'PS Vita', 'vita':'PS Vita',
+  'ps1':'PS1', 'psx':'PS1', 'playstation 1':'PS1', 'playstation':'PS1',
+  'ps2':'PS2', 'playstation 2':'PS2',
+  'ps3':'PS3', 'playstation 3':'PS3',
+  'ps4':'PS4', 'playstation 4':'PS4',
+  'ps5':'PS5', 'playstation 5':'PS5',
+  'xbox360':'Xbox 360', 'x360':'Xbox 360',
+  'xboxone':'Xbox One', 'xb1':'Xbox One',
+  'snes':'SNES', 'super nintendo':'SNES',
+  'nes':'NES',
+  'dreamcast':'Sega Dreamcast',
+  'game gear':'Sega Game Gear', 'gamegear':'Sega Game Gear',
+  'master system':'Sega Master System', 'mastersystem':'Sega Master System', 'sms':'Sega Master System',
+  'saturn':'Sega Saturn',
+  'neo geo pocket color':'Neo Geo Pocket Color', 'ngpc':'Neo Geo Pocket Color',
+  'atari 2600':'Atari 2600', 'atari2600':'Atari 2600',
+  'atari 7800':'Atari 7800', 'atari7800':'Atari 7800'
+};
+function normalizePasteLine(line){
+  return line.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function matchConsoleSuffix(line){
+  const lower = line.toLowerCase();
+  const catalogConsoles = [...new Set(GAMES.map(g => g.console))].sort((a,b) => b.length - a.length);
+  const isBoundary = (before) => before !== '' && (/[\s\-,]$/.test(before));
+  for (const c of catalogConsoles){
+    const cl = c.toLowerCase();
+    if (lower === cl || !lower.endsWith(cl)) continue;
+    const before = lower.slice(0, lower.length - cl.length);
+    if (isBoundary(before)) return { console: c, titlePart: line.slice(0, line.length - c.length).trim() };
+  }
+  const aliasKeys = Object.keys(CONSOLE_ALIASES).sort((a,b) => b.length - a.length);
+  for (const key of aliasKeys){
+    if (lower === key || !lower.endsWith(key)) continue;
+    const before = lower.slice(0, lower.length - key.length);
+    if (isBoundary(before)) return { console: CONSOLE_ALIASES[key], titlePart: line.slice(0, line.length - key.length).trim() };
+  }
+  return null;
+}
+function findCatalogMatch(titlePart, consoleName){
+  if (!titlePart) return {type:'none'};
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const wantTitle = norm(titlePart);
+  const candidates = consoleName ? GAMES.filter(g => g.console === consoleName) : GAMES;
+  const exact = candidates.filter(g => norm(g.title) === wantTitle);
+  if (exact.length === 1) return {type:'match', game: exact[0]};
+  if (exact.length > 1) return {type:'ambiguous', options: exact};
+  const contains = candidates.filter(g => {
+    const gt = norm(g.title);
+    return (gt.length >= 3 && wantTitle.includes(gt)) || (wantTitle.length >= 3 && gt.includes(wantTitle));
+  });
+  if (contains.length === 1) return {type:'match', game: contains[0]};
+  if (contains.length > 1){
+    contains.sort((a,b) => Math.abs(norm(a.title).length - wantTitle.length) - Math.abs(norm(b.title).length - wantTitle.length));
+    const bestGap = Math.abs(norm(contains[0].title).length - wantTitle.length);
+    const nextGap = Math.abs(norm(contains[1].title).length - wantTitle.length);
+    if (bestGap < nextGap) return {type:'fuzzy', game: contains[0]};
+    return {type:'ambiguous', options: contains};
+  }
+  return {type:'none'};
+}
+function parsePasteList(text){
+  return text.split('\n').map(l => l.trim()).filter(Boolean).map(rawLine => {
+    const line = normalizePasteLine(rawLine);
+    const consoleMatch = matchConsoleSuffix(line);
+    const consoleName = consoleMatch ? consoleMatch.console : null;
+    const titlePart = consoleMatch ? consoleMatch.titlePart : line;
+    return { raw: rawLine, result: findCatalogMatch(titlePart, consoleName) };
+  });
+}
+function renderPasteListResults(results){
+  const el = document.getElementById('paste-list-result');
+  if (!results.length){ el.innerHTML = ''; return; }
+  const matched = results.filter(r => r.result.type === 'match' || r.result.type === 'fuzzy');
+  const problems = results.filter(r => r.result.type !== 'match' && r.result.type !== 'fuzzy');
+  let html = `<div class="variety-note ${matched.length === results.length ? 'good' : (matched.length ? 'neutral' : 'warn')}" style="margin-top:8px;">${matched.length} of ${results.length} matched and added to cart.</div>`;
+  if (problems.length){
+    html += '<div class="row-sub" style="margin-top:6px;">Needs a manual look:</div>';
+    html += problems.map(r => {
+      if (r.result.type === 'ambiguous'){
+        const opts = r.result.options.slice(0, 6).map(g => escapeHtml(g.console + ' - ' + g.title)).join(', ');
+        return `<div class="row-sub">&ldquo;${escapeHtml(r.raw)}&rdquo; &mdash; more than one match (${opts}). Add manually from Buy.</div>`;
+      }
+      return `<div class="row-sub">&ldquo;${escapeHtml(r.raw)}&rdquo; &mdash; not found. Add it from Buy as a new game.</div>`;
+    }).join('');
+  }
+  el.innerHTML = html;
 }
 function addCustomToCart(){
   const titleEl = document.getElementById('custom-title');
@@ -1438,13 +1564,13 @@ function addCustomToCart(){
   if (!consoleName) missing.push('a console');
   if (isNaN(sell) || sell < 0) missing.push('a sell price');
   if (missing.length){
-    alert('Still need: ' + missing.join(', ') + '. (Buy price is optional - leave it blank and it\'ll be suggested from the value tier.)');
+    showToast('Still need: ' + missing.join(', ') + '. (Buy price is optional - leave it blank and it\'ll be suggested from the value tier.)', 4600);
     return;
   }
 
   const buy = buyRaw === '' ? suggestBuyPrice(sell, tierEl.value) : parseFloat(buyRaw);
   if (isNaN(buy) || buy < 0) {
-    alert('Buy price doesn\'t look like a valid number - leave it blank to auto-suggest instead.');
+    showToast('Buy price doesn\'t look like a valid number - leave it blank to auto-suggest instead.', 4600);
     return;
   }
 
@@ -1459,7 +1585,7 @@ function addCustomToCart(){
     const savedGame = GAMES.find(g => g.console === consoleName && g.title === title);
     addToCart(savedGame);
   } else {
-    alert('A game with that console + title already exists - edit it from the list above instead.');
+    showToast('A game with that console + title already exists - edit it from the list above instead.', 4600);
     return;
   }
 
@@ -1586,7 +1712,7 @@ document.getElementById('custom-add-btn').addEventListener('click', addCustomToC
 document.getElementById('custom-pc-search').addEventListener('click', () => {
   const title = document.getElementById('custom-title').value.trim();
   const consoleName = document.getElementById('custom-console').value.trim();
-  if (!title) { alert('Type a game title first.'); return; }
+  if (!title) { showToast('Type a game title first.'); return; }
   window.open(priceChartingUrl(title, consoleName), '_blank', 'noopener');
 });
 document.getElementById('custom-sell').addEventListener('input', () => {
@@ -1596,6 +1722,17 @@ document.getElementById('custom-sell').addEventListener('input', () => {
   }
 });
 document.getElementById('clear-cart-btn').addEventListener('click', () => { cart = []; renderCart(); });
+document.getElementById('paste-list-btn').addEventListener('click', () => {
+  const inputEl = document.getElementById('paste-list-input');
+  const text = inputEl.value;
+  if (!text.trim()) return;
+  const results = parsePasteList(text);
+  results.forEach(r => {
+    if (r.result.type === 'match' || r.result.type === 'fuzzy') addToCart(r.result.game);
+  });
+  renderPasteListResults(results);
+  inputEl.value = '';
+});
 
 const overrideInput = document.getElementById('override-pct');
 const overrideLabel = document.getElementById('override-pct-label');
@@ -1778,7 +1915,7 @@ document.getElementById('save-quote-btn').addEventListener('click', () => {
   savedQuotes.push(q);
   saveSavedQuotes();
   renderSavedQuotes();
-  alert('Quote saved. Find it under "Saved quotes" below the cart any time - your list stays in the cart too.');
+  showToast('Quote saved. Find it under "Saved quotes" below the cart any time.', 4600);
 });
 document.getElementById('download-quote-btn').addEventListener('click', () => {
   if (cart.length === 0) return;
@@ -1866,7 +2003,7 @@ function renderInventoryTab(){
       <div style="text-align:right;">
         <div class="price-buy">${fmt(it.paidPrice)}<span class="price-label">buy</span></div>
         <label style="display:flex; align-items:center; gap:3px; justify-content:flex-end; margin-top:2px;">
-          <span style="font-size:0.7rem;">$</span><input type="number" min="0" step="0.5" value="${it.sellPrice != null ? it.sellPrice : ''}" data-id="${it.id}" class="inv-sell-input" style="width:56px; padding:3px 4px; font-size:0.8rem;"><span class="price-label">sell</span>
+          <span style="font-size:0.7rem;">$</span><input type="number" min="0" step="0.5" value="${it.sellPrice != null ? it.sellPrice : ''}" data-id="${it.id}" class="inv-sell-input" style="width:64px; padding:3px 4px; font-size:16px;"><span class="price-label">sell</span>
         </label>
         <button class="edit-reset-btn" data-id="${it.id}" data-action="solo" style="margin-left:0;">${it.reservedForSolo ? 'un-reserve' : 'reserve solo'}</button>
       </div>
@@ -2252,7 +2389,7 @@ function renderReadyToSell(){
       const platform = row.querySelector('.sale-platform-select').value;
       const soldPrice = parseFloat(row.querySelector('.sale-price-input').value);
       if (isNaN(soldPrice) || soldPrice < 0){
-        alert('Enter a valid sold price first.');
+        showToast('Enter a valid sold price first.');
         return;
       }
       markBoxSold(id, platform, soldPrice);
@@ -2368,12 +2505,30 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
 </script>
 <script>
   // Register service worker for offline support / home-screen install.
+  // Status is surfaced in #offline-status so "why doesn't this work offline" is
+  // debuggable from the phone itself instead of failing silently.
+  const offlineStatusEl = document.getElementById('offline-status');
+  function setOfflineStatus(text, ok){
+    if (!offlineStatusEl) return;
+    offlineStatusEl.textContent = text;
+    offlineStatusEl.style.color = ok ? 'var(--good)' : 'var(--warn)';
+  }
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('service-worker.js').catch(() => {
-        // Non-fatal: app still works, just without offline caching this session.
+      navigator.serviceWorker.register('service-worker.js').then(() => {
+        return navigator.serviceWorker.ready;
+      }).then(() => {
+        setOfflineStatus('✓ Offline mode ready — this works without a connection.', true);
+      }).catch((err) => {
+        console.warn('Service worker registration failed:', err);
+        setOfflineStatus('⚠ Offline mode failed to start — needs a connection each time. (' + (err && err.message ? err.message : 'see console') + ')', false);
       });
     });
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      setOfflineStatus('✓ Offline mode ready — this works without a connection.', true);
+    });
+  } else {
+    setOfflineStatus('⚠ This browser doesn\'t support offline mode.', false);
   }
 </script>
 </body>

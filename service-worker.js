@@ -1,12 +1,12 @@
 // Game In A Box — offline cache
 // Bump CACHE_NAME any time index.html changes, so the new version installs cleanly.
-const CACHE_NAME = "game-in-a-box-v9";
+const CACHE_NAME = "game-in-a-box-v13";
 const CORE_ASSETS = [
   "./index.html",
   "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/apple-touch-icon.png"
+  "./icon-192.png",
+  "./icon-512.png",
+  "./apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {
