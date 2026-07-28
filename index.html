@@ -476,6 +476,8 @@
     <div id="cart-list"></div>
     <div class="summary-box" id="cart-summary" style="display:none">
       <div class="summary-line"><span id="cart-count-line">0 items</span><span id="cart-total-line">$0</span></div>
+      <div class="summary-line"><span>Combined sell value</span><span id="cart-sell-line">$0</span></div>
+      <div class="summary-line grand" id="cart-margin-line"><span>Possible margin</span><span id="cart-margin-value">$0</span></div>
       <div class="variety-note neutral" id="cart-yield"></div>
       <div class="variety-note neutral" id="cart-variety"></div>
       <label style="display:block; font-size:0.76rem; color:var(--muted); margin-top:10px; margin-bottom:4px;">Lot / seller note (optional)</label>
@@ -1775,8 +1777,13 @@ function lotYieldMessage(items){
 
 function updateCartSummary(){
   const total = cart.reduce((s,c) => s + (parseFloat(c.price)||0), 0);
+  const sellTotal = cart.reduce((s,c) => s + (c.aud != null ? c.aud : c.price), 0);
+  const margin = sellTotal - total;
   document.getElementById('cart-count-line').textContent = cart.length + (cart.length===1?' item':' items');
   document.getElementById('cart-total-line').textContent = fmt(total);
+  document.getElementById('cart-sell-line').textContent = fmt(sellTotal);
+  document.getElementById('cart-margin-value').textContent = (margin >= 0 ? '+' : '') + fmt(margin);
+  document.getElementById('cart-margin-line').className = 'summary-line grand ' + (margin >= 0 ? 'margin-pos' : 'margin-neg');
 
   const yieldMsg = lotYieldMessage(cart);
   const yieldEl = document.getElementById('cart-yield');
@@ -1901,15 +1908,13 @@ function generateFriendQuoteText(){
 function generateSellerQuoteText(){
   const total = cart.reduce((s,c) => s + (parseFloat(c.price)||0), 0);
   const lines = [];
-  lines.push(quoteIntro.trim() || "Hi! I'm interested in buying these games from you:");
+  lines.push(quoteIntro.trim() || "Hey! Keen to grab a few of these off you:");
   lines.push('');
   cart.forEach(c => {
-    lines.push('- ' + c.title + (c.console ? ' (' + c.console + ')' : '') + ' - ' + fmt(c.price));
+    lines.push('- ' + c.title + (c.console ? ' (' + c.console + ')' : ''));
   });
   lines.push('');
-  lines.push('Happy to buy individually at these prices, or I\'ll take the whole lot together for ' + fmt(total) + ' if that\'s easier for you.');
-  lines.push('');
-  lines.push('Let me know if that works!');
+  lines.push(`Happy to take the whole lot together for ${fmt(total)} if that works for you — let me know!`);
   return lines.join('\n');
 }
 
