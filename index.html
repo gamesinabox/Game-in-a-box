@@ -429,10 +429,10 @@
       <label class="filler-toggle"><input type="checkbox" id="hide-filler-filter"> Hide Filler Trash</label>
     </div>
     <div class="override-row">
-      <label for="override-pct">Suggest buy at <span id="override-pct-label">tier default</span> of sell price</label>
-      <input type="number" id="override-pct" min="0" max="100" step="1" placeholder="e.g. 40">
+      <label for="override-pct">Buy at <span id="override-pct-label">30</span>% under retail <span class="hint">saved as your default, applies everywhere</span></label>
+      <input type="number" id="override-pct" min="0" max="100" step="1">
       <span style="color:var(--muted);font-size:0.9rem;">%</span>
-      <button class="clear-override" id="clear-override">reset</button>
+      <button class="clear-override" id="clear-override">reset to 30%</button>
     </div>
   </div>
   <div class="count-line" id="count-line"></div>
@@ -675,7 +675,7 @@ let removedItemIds = {};
 let packedSummary = {count: 0, totalMargin: 0};
 let lots = [];
 let cart = [];
-let overridePct = null;
+let buyDiscountPct = 30; // % under retail you pay by default - editable, persisted, applies catalog-wide
 let loadedQuoteId = null;
 let quoteIntro = '';
 let quoteTemplateId = 'convenience';
@@ -702,6 +702,7 @@ const LS_CATALOG_ADD = 'loosecart_catalog_additions';
 const LS_QUOTE_INTRO = 'loosecart_quote_intro';
 const LS_QUOTE_TEMPLATE = 'loosecart_quote_template';
 const LS_GENRE_OVERRIDES = 'loosecart_genre_overrides';
+const LS_BUY_DISCOUNT = 'loosecart_buy_discount_pct';
 
 let storageAvailable = true;
 let memoryFallback = {};
@@ -887,6 +888,14 @@ function loadQuoteTemplate(){
 function saveQuoteTemplate(){
   try { lsSet(LS_QUOTE_TEMPLATE, quoteTemplateId); }
   catch(e) { console.error('quote template save failed', e); }
+}
+function loadBuyDiscountPct(){
+  const v = parseFloat(lsGet(LS_BUY_DISCOUNT));
+  buyDiscountPct = (!isNaN(v) && v >= 0 && v <= 100) ? v : 30;
+}
+function saveBuyDiscountPct(){
+  try { lsSet(LS_BUY_DISCOUNT, String(buyDiscountPct)); }
+  catch(e) { console.error('buy discount save failed', e); }
 }
 let genreOverrides = {};
 function loadGenreOverrides(){
@@ -1228,12 +1237,15 @@ function pcLink(title, consoleName){
 function fmt(n){ return '$' + Math.round(n).toLocaleString('en-AU', {maximumFractionDigits:0}); }
 function tierBadgeClass(tier){ return 'badge badge-' + tier; }
 function fillerBadgeHtml(filler){ return filler ? '<span class="badge des-badge-Filler">Filler Trash</span>' : ''; }
+// buyDiscountPct is "% under retail" (matches how the business actually talks about it) -
+// paying that much less than sell price, so the pay fraction is the complement of the discount.
 function buyPriceFor(g){
-  if (overridePct != null) return Math.round(g.aud * overridePct / 100);
-  return g.bulk;
+  const key = gameKey(g.console, g.title);
+  if (priceOverrides[key]) return g.bulk; // this specific game has a deliberately-set buy price
+  return Math.round(g.aud * (100 - buyDiscountPct) / 100 * 100) / 100;
 }
 function suggestBuyPrice(sell, tier){
-  return Math.round(sell * 0.6 * 100) / 100;
+  return Math.round(sell * (100 - buyDiscountPct) / 100 * 100) / 100;
 }
 
 // ---------- Dashboard ----------
@@ -1460,7 +1472,7 @@ function renderResults(){
           <div class="row-sub">${escapeHtml(g.console)} &middot; ${escapeHtml(g.genre)}</div>
           <div class="edit-fields">
             <label>Sell $<input type="number" class="edit-sell" value="${g.aud}" min="0" step="0.5"></label>
-            <label>Buy $<input type="number" class="edit-buy" value="${g.bulk}" min="0" step="0.5"></label>
+            <label>Buy $<input type="number" class="edit-buy" value="${buyPriceFor(g)}" min="0" step="0.5"></label>
           </div>
           <div class="edit-fields">
             <label>Value tier
@@ -1534,7 +1546,7 @@ function renderResults(){
       const row = inp.closest('.row');
       const buyInp = row.querySelector('.edit-buy');
       if (!isNaN(sell) && sell >= 0) {
-        buyInp.value = Math.round(sell * 0.6 * 100) / 100;
+        buyInp.value = suggestBuyPrice(sell);
       }
     });
   });
@@ -1916,9 +1928,9 @@ function renderCart(){
       const catalogGame = GAMES.find(g => g.console === item.console && g.title === item.title);
       if (catalogGame) {
         if (!isNaN(sellVal) && sellVal >= 0) {
-          setPriceOverride(catalogGame, sellVal, catalogGame.bulk, tierVal, catalogGame.filler);
+          setPriceOverride(catalogGame, sellVal, suggestBuyPrice(sellVal), tierVal, catalogGame.filler);
         } else if (tierVal !== catalogGame.tier) {
-          setPriceOverride(catalogGame, catalogGame.aud, catalogGame.bulk, tierVal, catalogGame.filler);
+          setPriceOverride(catalogGame, catalogGame.aud, buyPriceFor(catalogGame), tierVal, catalogGame.filler);
         }
         setGenre(catalogGame.console, catalogGame.title, genreVal);
       }
@@ -2001,7 +2013,7 @@ document.getElementById('custom-pc-search').addEventListener('click', () => {
 document.getElementById('custom-sell').addEventListener('input', () => {
   const sell = parseFloat(document.getElementById('custom-sell').value);
   if (!isNaN(sell) && sell >= 0) {
-    document.getElementById('custom-buy').value = Math.round(sell * 0.6 * 100) / 100;
+    document.getElementById('custom-buy').value = suggestBuyPrice(sell);
   }
 });
 document.getElementById('clear-cart-btn').addEventListener('click', () => { cart = []; loadedQuoteId = null; renderCart(); });
@@ -2023,12 +2035,18 @@ const overrideInput = document.getElementById('override-pct');
 const overrideLabel = document.getElementById('override-pct-label');
 overrideInput.addEventListener('input', () => {
   const v = parseFloat(overrideInput.value);
-  overridePct = (overrideInput.value === '' || isNaN(v)) ? null : Math.max(0, Math.min(100, v));
-  overrideLabel.textContent = overridePct != null ? overridePct + '%' : 'tier default';
+  if (overrideInput.value === '' || isNaN(v)) return;
+  buyDiscountPct = Math.max(0, Math.min(100, v));
+  overrideLabel.textContent = buyDiscountPct;
+  saveBuyDiscountPct();
   renderResults();
 });
 document.getElementById('clear-override').addEventListener('click', () => {
-  overrideInput.value=''; overridePct = null; overrideLabel.textContent = 'tier default'; renderResults();
+  buyDiscountPct = 30;
+  overrideInput.value = buyDiscountPct;
+  overrideLabel.textContent = buyDiscountPct;
+  saveBuyDiscountPct();
+  renderResults();
 });
 
 document.getElementById('commit-inventory-btn').addEventListener('click', async () => {
@@ -2854,6 +2872,9 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
   loadPackedBoxes();
   loadClearedOverrides();
   applyPriceOverrides();
+  loadBuyDiscountPct();
+  document.getElementById('override-pct').value = buyDiscountPct;
+  document.getElementById('override-pct-label').textContent = buyDiscountPct;
   loadGenreOverrides();
   applyGenreOverrides();
   loadLots();
