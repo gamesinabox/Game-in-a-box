@@ -1,12 +1,16 @@
 // Game In A Box — offline cache
 // Bump CACHE_NAME any time index.html changes, so the new version installs cleanly.
-const CACHE_NAME = "game-in-a-box-v18";
+const CACHE_NAME = "game-in-a-box-v19";
 const CORE_ASSETS = [
   "./index.html",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  "./vendor/tesseract/tesseract.min.js",
+  "./vendor/tesseract/worker.min.js",
+  "./vendor/tesseract/tesseract-core-simd-lstm.wasm.js",
+  "./vendor/tesseract/eng.traineddata.gz"
 ];
 
 self.addEventListener("install", (event) => {

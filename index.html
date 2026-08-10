@@ -465,6 +465,16 @@
 <!-- CART & QUOTES TAB -->
 <div class="tab-panel" id="tab-cart">
   <main>
+    <div class="section-title">Scan covers <span class="hint">experimental - reads titles off photos, always check the text before matching</span></div>
+    <div class="controls" style="position:static; border:1px solid var(--line); border-radius:10px; margin-bottom:14px;">
+      <div class="filters" style="margin-bottom:8px;">
+        <select id="scan-console-select"><option value="">No console header (mixed consoles)</option></select>
+      </div>
+      <button class="primary-btn" id="scan-cover-btn" style="background:var(--accent);">&#128247; Scan a cover photo</button>
+      <input type="file" id="scan-cover-input" accept="image/*" capture="environment" style="display:none;">
+      <div class="variety-note neutral" id="scan-status" style="display:none; margin-top:8px;"></div>
+    </div>
+
     <div class="section-title">Paste a list <span class="hint">console at the end of a line, or its own header line above a group</span></div>
     <div class="controls" style="position:static; border:1px solid var(--line); border-radius:10px; margin-bottom:14px;">
       <textarea id="paste-list-input" rows="5" class="paste-textarea" placeholder="PS5:&#10;Elden Ring, Helldivers 2, Call of Duty Black Ops 7&#10;&#10;Fallout 4 PS4 x2"></textarea>
@@ -625,6 +635,8 @@
   <button data-tab="pack"><span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="10.5" rx="1"/><path d="M3.5 9h17"/><path d="M12 9v10.5"/><path d="M8 9c-1.5 0-2.6-1-2.6-2.2C5.4 5.5 6.4 4.5 7.6 4.5c1.8 0 3.4 2 4.4 4.5"/><path d="M16 9c1.5 0 2.6-1 2.6-2.2 0-1.3-1-2.3-2.2-2.3-1.8 0-3.4 2-4.4 4.5"/></svg></span>Pack</button>
 </nav>
 
+<!-- Self-hosted so cover-scanning works fully offline, same as everything else in this app. -->
+<script src="vendor/tesseract/tesseract.min.js"></script>
 <script>
 const TIER_CODES = {C:'Common',M:'Mid',U:'Uncommon/Rare',G:'Grail-exclude'};
 const QUOTE_STATUSES = ['pending', 'bought', 'declined'];
@@ -1373,6 +1385,7 @@ populateSelect(document.getElementById('inv-console-filter'), consoles);
 populateSelect(document.getElementById('custom-genre'), genres);
 populateSelect(document.getElementById('custom-tier'), tiers);
 populateSelect(document.getElementById('exclude-consoles'), consoles);
+populateSelect(document.getElementById('scan-console-select'), consoles);
 populateSelect(document.getElementById('exclude-genres'), GENRE_OPTIONS);
 consoles.forEach(c => {
   const opt = document.createElement('option');
@@ -2029,6 +2042,60 @@ document.getElementById('paste-list-btn').addEventListener('click', () => {
   });
   renderPasteListResults(results);
   inputEl.value = '';
+});
+
+// ---------- Cover-photo scanning (OCR, on-device via self-hosted Tesseract.js) ----------
+// Keeps a few of the longest legible lines per photo (box titles are usually the most
+// prominent text, but plain OCR output doesn't preserve font size, so line length is
+// the best cheap proxy) and drops obvious junk (too short, no letters, barcode noise).
+function cleanOcrText(raw){
+  const lines = raw.split('\n')
+    .map(l => l.replace(/[^\w\s':&.-]/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(l => l.length >= 3 && /[a-zA-Z]{2,}/.test(l));
+  const unique = [...new Set(lines)];
+  unique.sort((a,b) => b.length - a.length);
+  return unique.slice(0, 3).join('\n');
+}
+document.getElementById('scan-cover-btn').addEventListener('click', () => {
+  document.getElementById('scan-cover-input').click();
+});
+document.getElementById('scan-cover-input').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  e.target.value = ''; // allow re-selecting the same file next time
+  if (!files.length) return;
+  const statusEl = document.getElementById('scan-status');
+  const consoleHeader = document.getElementById('scan-console-select').value;
+  const textarea = document.getElementById('paste-list-input');
+  statusEl.style.display = 'block';
+  statusEl.className = 'variety-note neutral';
+  const foundBlocks = [];
+  for (let i = 0; i < files.length; i++) {
+    statusEl.textContent = `Scanning photo ${i + 1} of ${files.length}...`;
+    try {
+      const { data: { text } } = await Tesseract.recognize(files[i], 'eng', {
+        // Must be absolute: Tesseract.js creates a nested worker whose relative-URL
+        // resolution isn't reliably the page's, so a bare relative path breaks there.
+        workerPath: new URL('vendor/tesseract/worker.min.js', document.baseURI).href,
+        corePath: new URL('vendor/tesseract/tesseract-core-simd-lstm.wasm.js', document.baseURI).href,
+        langPath: new URL('vendor/tesseract/', document.baseURI).href,
+        gzip: true
+      });
+      const cleaned = cleanOcrText(text);
+      if (cleaned) foundBlocks.push(cleaned);
+    } catch (err) {
+      console.warn('OCR failed for photo', i, err);
+    }
+  }
+  if (foundBlocks.length) {
+    let block = foundBlocks.join('\n');
+    if (consoleHeader) block = consoleHeader + ':\n' + block;
+    textarea.value = (textarea.value.trim() ? textarea.value.trim() + '\n\n' : '') + block;
+    statusEl.className = 'variety-note good';
+    statusEl.textContent = `Scanned ${foundBlocks.length} of ${files.length} photo(s) - review the text below before matching, OCR on box art won't always be clean.`;
+  } else {
+    statusEl.className = 'variety-note warn';
+    statusEl.textContent = "Couldn't read any text from that - try better lighting/angle, or just type the title below.";
+  }
 });
 
 const overrideInput = document.getElementById('override-pct');
