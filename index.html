@@ -199,6 +199,14 @@
     width:52px; height:52px; object-fit:cover; border-radius:7px; border:1px solid var(--line);
     background:var(--field-bg); cursor:pointer;
   }
+  .inv-details-toggle{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;
+    margin-top:6px; padding:6px 9px; background:var(--field-bg); border:1px solid var(--line);
+    border-radius:7px; font-family:inherit; font-size:0.72rem; color:var(--muted); cursor:pointer;
+    text-align:left;
+  }
+  .inv-details-toggle .chev{ flex-shrink:0; color:var(--accent); }
+  .inv-details-panel{ margin-top:6px; padding-top:2px; }
   #photo-viewer-backdrop{
     display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:80;
     align-items:center; justify-content:center; flex-direction:column; padding:20px;
@@ -927,6 +935,8 @@ let quoteIntro = '';
 let quoteTemplateId = 'convenience';
 let cartEditingId = null;
 let invThumbUrls = [];
+let expandedInvIds = new Set();
+let packThumbUrls = [];
 let receivingSession = null;
 let receivingCaptureSlot = null;
 let receivingThumbUrls = [];
@@ -3412,6 +3422,13 @@ function renderInventoryTab(){
     const age = daysAgo(it.dateAdded);
     const isAging = age >= 60;
     const hindsight = hindsightBadge(it);
+    const photoCount = it.photos ? ['front','back','disc'].filter(s => it.photos[s]).length : 0;
+    const isExpanded = expandedInvIds.has(it.id);
+    const summaryBits = [];
+    if (it.genre && it.genre !== 'Unsorted') summaryBits.push(escapeHtml(it.genre));
+    if (it.conditionNote && it.conditionNote.trim()) summaryBits.push(escapeHtml(it.conditionNote.length > 30 ? it.conditionNote.slice(0,30) + '…' : it.conditionNote));
+    if (photoCount) summaryBits.push('&#128247; ' + photoCount);
+    const summaryText = summaryBits.length ? summaryBits.join(' &middot; ') : 'Genre, condition, photos';
     return `<div class="inv-row">
       <div style="flex:1">
         <div class="cr-title">${escapeHtml(it.title)} ${pcLink(it.title, it.console)}</div>
@@ -3421,22 +3438,27 @@ function renderInventoryTab(){
           ${hindsight ? `<span class="edited-badge" style="background:${hindsight.level==='good'?'var(--good-bg)':'var(--warn-bg)'};color:${hindsight.level==='good'?'var(--good)':'var(--warn)'};">${hindsight.text}</span>` : ''}
         </div>
         <div class="cr-sub" style="margin-top:3px;">${age === 0 ? 'added today' : age + 'd ago'}${isAging ? ' &middot; <span style="color:var(--warn);font-weight:600;">aging</span>' : ''}${it.lotLabel ? ' &middot; ' + escapeHtml(it.lotLabel) : ''}</div>
-        <div style="margin-top:4px; display:flex; align-items:center; gap:5px;">
-          <span style="font-size:0.7rem; color:var(--muted);">Genre</span>
-          <select class="inv-genre-select" data-id="${it.id}" style="font-size:0.76rem; padding:3px 6px;">
-            ${GENRE_OPTIONS.map(gn => `<option value="${gn}" ${(it.genre||'Unsorted')===gn?'selected':''}>${gn}</option>`).join('')}
-          </select>
-        </div>
-        <div style="margin-top:4px;">
-          ${NOTE_OPTIONS.map(n => `<button class="note-chip${(it.notes||[]).includes(n) ? ' active' : ''}" data-id="${it.id}" data-note="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}
-        </div>
         ${(it.manualIncluded != null || it.receivedBy) ? `<div class="cr-sub" style="margin-top:4px;">
           ${it.manualIncluded != null ? (it.manualIncluded ? '<span class="edited-badge" style="background:var(--good-bg);color:var(--good);">Manual included</span>' : '<span class="edited-badge" style="background:var(--warn-bg);color:var(--warn);">No manual</span>') : ''}
           ${it.receivedBy ? `Received by ${escapeHtml(it.receivedBy)}${it.receivedAt ? ' &middot; ' + new Date(it.receivedAt).toLocaleDateString('en-AU') : ''}` : ''}
         </div>` : ''}
-        <textarea class="inv-condition-note" data-id="${it.id}" placeholder="Condition note (e.g. light scratches)..." rows="1">${escapeHtml(it.conditionNote || '')}</textarea>
-        ${(it.photos && (it.photos.front || it.photos.back || it.photos.disc)) ? `<div class="inv-photo-row" data-item-id="${it.id}">
-          ${['front','back','disc'].map(slot => it.photos[slot] ? `<img class="inv-photo-thumb" data-photo-id="${it.photos[slot]}" data-slot="${slot}" alt="${slot}">` : '').join('')}
+        <button class="inv-details-toggle" data-id="${it.id}" type="button">
+          <span>${summaryText}</span><span class="chev">${isExpanded ? '&#9662;' : '&#9656;'}</span>
+        </button>
+        ${isExpanded ? `<div class="inv-details-panel">
+          <div style="display:flex; align-items:center; gap:5px;">
+            <span style="font-size:0.7rem; color:var(--muted);">Genre</span>
+            <select class="inv-genre-select" data-id="${it.id}" style="font-size:0.76rem; padding:3px 6px;">
+              ${GENRE_OPTIONS.map(gn => `<option value="${gn}" ${(it.genre||'Unsorted')===gn?'selected':''}>${gn}</option>`).join('')}
+            </select>
+          </div>
+          <div style="margin-top:6px;">
+            ${NOTE_OPTIONS.map(n => `<button class="note-chip${(it.notes||[]).includes(n) ? ' active' : ''}" data-id="${it.id}" data-note="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}
+          </div>
+          <textarea class="inv-condition-note" data-id="${it.id}" placeholder="Condition note (e.g. light scratches)..." rows="1">${escapeHtml(it.conditionNote || '')}</textarea>
+          ${photoCount ? `<div class="inv-photo-row" data-item-id="${it.id}">
+            ${['front','back','disc'].map(slot => it.photos[slot] ? `<img class="inv-photo-thumb" data-photo-id="${it.photos[slot]}" data-slot="${slot}" alt="${slot}">` : '').join('')}
+          </div>` : ''}
         </div>` : ''}
       </div>
       <div style="text-align:right;">
@@ -3449,6 +3471,14 @@ function renderInventoryTab(){
       <button class="rm-btn" data-id="${it.id}" aria-label="Remove">&times;</button>
     </div>`;
   }).join('');
+  listEl.querySelectorAll('.inv-details-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      if (expandedInvIds.has(id)) expandedInvIds.delete(id);
+      else expandedInvIds.add(id);
+      renderInventoryTab();
+    });
+  });
   listEl.querySelectorAll('.rm-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.getAttribute('data-id');
@@ -3638,7 +3668,9 @@ function renderPackPool(){
     poolEl.innerHTML = `<div class="empty-state">${inventory.length === 0 ? 'No inventory yet - buy some games first.' : 'No more matches.' + extra}</div>`;
     return;
   }
-  poolEl.innerHTML = avail.slice(0, 30).map(it => `
+  poolEl.innerHTML = avail.slice(0, 30).map(it => {
+    const photoCount = it.photos ? ['front','back','disc'].filter(s => it.photos[s]).length : 0;
+    return `
     <div class="row">
       <div class="row-main">
         <div class="row-title">${escapeHtml(it.title)} ${pcLink(it.title, it.console)}</div>
@@ -3648,6 +3680,10 @@ function renderPackPool(){
         <select class="pack-genre-select" data-id="${it.id}" style="font-size:0.7rem; padding:2px 4px; margin-top:3px;">
           ${GENRE_OPTIONS.map(gn => `<option value="${gn}" ${(it.genre||'Unsorted')===gn?'selected':''}>${gn}</option>`).join('')}
         </select>
+        ${(it.conditionNote && it.conditionNote.trim()) || photoCount ? `<div class="row-sub" style="margin-top:3px; align-items:center;">
+          ${it.conditionNote && it.conditionNote.trim() ? escapeHtml(it.conditionNote.length > 34 ? it.conditionNote.slice(0,34) + '…' : it.conditionNote) : ''}
+          ${photoCount ? `<span style="display:inline-flex; gap:3px;">${['front','back','disc'].map(slot => it.photos[slot] ? `<img class="inv-photo-thumb" data-photo-id="${it.photos[slot]}" data-slot="${slot}" alt="${slot}" style="width:24px; height:24px; border-radius:5px;">` : '').join('')}</span>` : ''}
+        </div>` : ''}
       </div>
       <div class="row-price">
         <div class="price-buy">${fmt(it.paidPrice)}<span class="price-label">buy</span></div>
@@ -3655,8 +3691,19 @@ function renderPackPool(){
       </div>
       <button class="pick-btn" data-id="${it.id}" ${full ? 'disabled' : ''} aria-label="Add as one of the 3">+</button>
       <button class="bonus-pick-btn" data-id="${it.id}" ${bonusSlot ? 'disabled' : ''} style="background:none;color:var(--accent);font-size:1.1rem;" aria-label="Add as bonus">&#127873;</button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+  packThumbUrls.forEach(u => URL.revokeObjectURL(u));
+  packThumbUrls = [];
+  poolEl.querySelectorAll('.inv-photo-thumb').forEach(img => {
+    const photoId = img.getAttribute('data-photo-id');
+    getPhotoBlob(photoId).then(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      packThumbUrls.push(url);
+      img.src = url;
+    });
+  });
   poolEl.querySelectorAll('.pick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const it = inventory.find(x => x.id === btn.getAttribute('data-id'));
