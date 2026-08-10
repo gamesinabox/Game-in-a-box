@@ -353,6 +353,8 @@
 
   .brand-row{ display:flex; align-items:center; gap:10px; }
   .brand-logo{ width:32px; height:32px; border-radius:var(--r-sm); flex-shrink:0; box-shadow:var(--sh-sm); }
+  .brand-logo-banner{ height:56px; width:auto; display:block; flex-shrink:0; }
+  .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
   .settings-gear-btn{
     margin-left:auto; width:36px; height:36px; border-radius:var(--r-pill); border:1px solid var(--line);
     background:var(--field-bg); color:var(--ink); font-size:1.1rem; cursor:pointer; flex-shrink:0;
@@ -513,8 +515,8 @@
 
 <header>
   <div class="brand-row">
-    <img src="icon-192.png" alt="" class="brand-logo">
-    <h1>Game In A Box</h1>
+    <img src="logo-header.png" alt="Game In A Box" class="brand-logo-banner">
+    <h1 class="sr-only">Game In A Box</h1>
     <button id="open-settings-btn" class="settings-gear-btn" aria-label="Settings">&#9881;</button>
   </div>
   <p id="offline-status" style="margin:2px 0 0; font-size:0.76rem; color:var(--muted);"></p>
