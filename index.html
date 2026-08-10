@@ -102,6 +102,10 @@
   .row-main{flex:1; min-width:0;}
   .row-title{font-weight:600; font-size:0.92rem; line-height:1.25;}
   .row-sub{font-size:0.75rem; color:var(--muted); margin-top:3px; display:flex; gap:5px; flex-wrap:wrap; align-items:center;}
+  .scan-thumb{width:44px; height:44px; object-fit:cover; border-radius:8px; flex-shrink:0; background:var(--field-bg); border:1px solid var(--line);}
+  .scan-resolve-input{width:100%; margin-top:6px;}
+  .scan-resolve-picks{margin-top:6px;}
+  .scan-resolve-picks:empty{margin-top:0;}
   .badge{
     font-size:0.64rem; font-weight:600; padding:2px 7px; border-radius:999px;
     white-space:nowrap; text-transform:uppercase; letter-spacing:0.02em;
@@ -465,14 +469,19 @@
 <!-- CART & QUOTES TAB -->
 <div class="tab-panel" id="tab-cart">
   <main>
-    <div class="section-title">Scan covers <span class="hint">experimental - reads titles off photos, always check the text before matching</span></div>
+    <div class="section-title">Scan games <span class="hint">barcode first (instant once it's learned a game), falls back to reading the title</span></div>
     <div class="controls" style="position:static; border:1px solid var(--line); border-radius:10px; margin-bottom:14px;">
       <div class="filters" style="margin-bottom:8px;">
         <select id="scan-console-select"><option value="">No console header (mixed consoles)</option></select>
       </div>
-      <button class="primary-btn" id="scan-cover-btn" style="background:var(--accent);">&#128247; Scan a cover photo</button>
-      <input type="file" id="scan-cover-input" accept="image/*" capture="environment" style="display:none;">
+      <div class="filters">
+        <button class="primary-btn" id="scan-camera-btn" style="background:var(--accent); flex:1;">&#128247; Take Photo(s)</button>
+        <button class="primary-btn" id="scan-library-btn" style="background:var(--accent-2); flex:1;">&#128444; From Library</button>
+      </div>
+      <input type="file" id="scan-camera-input" accept="image/*" capture="environment" multiple style="display:none;">
+      <input type="file" id="scan-library-input" accept="image/*" multiple style="display:none;">
       <div class="variety-note neutral" id="scan-status" style="display:none; margin-top:8px;"></div>
+      <div id="scan-results"></div>
     </div>
 
     <div class="section-title">Paste a list <span class="hint">console at the end of a line, or its own header line above a group</span></div>
@@ -637,6 +646,7 @@
 
 <!-- Self-hosted so cover-scanning works fully offline, same as everything else in this app. -->
 <script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="vendor/zxing/zxing.min.js"></script>
 <script>
 const TIER_CODES = {C:'Common',M:'Mid',U:'Uncommon/Rare',G:'Grail-exclude'};
 const QUOTE_STATUSES = ['pending', 'bought', 'declined'];
@@ -715,6 +725,7 @@ const LS_QUOTE_INTRO = 'loosecart_quote_intro';
 const LS_QUOTE_TEMPLATE = 'loosecart_quote_template';
 const LS_GENRE_OVERRIDES = 'loosecart_genre_overrides';
 const LS_BUY_DISCOUNT = 'loosecart_buy_discount_pct';
+const LS_UPC_MAP = 'loosecart_upc_map';
 
 let storageAvailable = true;
 let memoryFallback = {};
@@ -948,6 +959,38 @@ function mergeGenreOverrides(theirGenres){
   if (added) { saveGenreOverrides(); applyGenreOverrides(); }
   return added;
 }
+// A UPC only ever maps to one product, so this is a self-built, free replacement for a paid
+// barcode-lookup API: empty at first, but every barcode you resolve once is instant forever
+// after (for you AND your friend, once you sync backups) - the app teaches itself over time.
+let upcMap = {};
+function loadUpcMap(){
+  try {
+    const raw = lsGet(LS_UPC_MAP);
+    upcMap = raw ? JSON.parse(raw) : {};
+  } catch(e) { upcMap = {}; }
+}
+function saveUpcMap(){
+  try { lsSet(LS_UPC_MAP, JSON.stringify(upcMap)); }
+  catch(e) { console.error('UPC map save failed', e); }
+}
+function setUpcMapping(upc, game){
+  upcMap[upc] = gameKey(game.console, game.title);
+  saveUpcMap();
+}
+function lookupUpc(upc){
+  const key = upcMap[upc];
+  if (!key) return null;
+  return GAMES.find(g => gameKey(g.console, g.title) === key) || null;
+}
+function mergeUpcMap(theirMap){
+  if (!theirMap) return 0;
+  let added = 0;
+  Object.keys(theirMap).forEach(upc => {
+    if (!(upc in upcMap)) { upcMap[upc] = theirMap[upc]; added++; }
+  });
+  if (added) saveUpcMap();
+  return added;
+}
 function mergeSavedQuotes(theirQuotes){
   const existingIds = new Set(savedQuotes.map(q => q.id));
   let added = 0;
@@ -1104,7 +1147,7 @@ function exportData(){
   const payload = {
     exportedAt: new Date().toISOString(),
     inventory, packedSummary, priceOverrides, clearedOverrides, removedItemIds, lots, catalogAdditions, savedQuotes,
-    priceHistory, soldArchive, packedBoxes, genreOverrides
+    priceHistory, soldArchive, packedBoxes, genreOverrides, upcMap
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1190,6 +1233,7 @@ function importData(file){
       const quotesAdded = Array.isArray(data.savedQuotes) ? mergeSavedQuotes(data.savedQuotes) : 0;
       if (Array.isArray(data.catalogAdditions)) { mergeCatalogUpdate(data.catalogAdditions); }
       const genresAdded = data.genreOverrides ? mergeGenreOverrides(data.genreOverrides) : 0;
+      const upcsAdded = data.upcMap ? mergeUpcMap(data.upcMap) : 0;
       if (data.packedSummary && data.packedSummary.count > packedSummary.count) {
         // Use whichever summary reflects more packed boxes - both devices pack independently, take the larger tally
         packedSummary = data.packedSummary;
@@ -1215,7 +1259,7 @@ function importData(file){
       updateNavBadge(); renderResults(); renderCart(); renderInventoryTab(); renderCheckedStat(); renderSavedQuotes(); renderPackTab(); renderDashboardTab();
       showToast('Merged: ' + invResult.added + ' new inventory items, ' + invResult.updated + ' updated, ' +
             priceResult.applied + ' price updates applied (' + priceResult.kept + ' of yours kept as newer), ' +
-            lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes, ' + genresAdded + ' genre tags filled in. Nothing was overwritten wholesale.', 6000);
+            lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes, ' + genresAdded + ' genre tags, ' + upcsAdded + ' learned barcodes. Nothing was overwritten wholesale.', 6000);
     } catch(err) {
       showToast('Could not read that file - make sure it\'s a Game In A Box backup or catalog-update JSON.', 5000);
     }
@@ -1728,6 +1772,38 @@ function findCatalogMatch(titlePart, consoleName){
   }
   return {type:'none'};
 }
+// Longest common substring, normalized 0-1. Cheap and fast enough for a few OCR lines against
+// ~32,600 titles (short strings), and matching against a KNOWN, finite catalog is a much easier
+// problem than general OCR - garbled text can still land close to the real title.
+function lcsScore(a, b){
+  if (!a || !b) return 0;
+  let best = 0;
+  for (let i = 0; i < a.length; i++){
+    for (let j = 0; j < b.length; j++){
+      let k = 0;
+      while (i + k < a.length && j + k < b.length && a[i + k] === b[j + k]) k++;
+      if (k > best) best = k;
+    }
+  }
+  return best / Math.max(a.length, b.length);
+}
+function fuzzyGuessCatalogMatches(ocrLine, consoleHeader, limit){
+  const target = squashText(ocrLine);
+  if (target.length < 3) return [];
+  const candidates = consoleHeader ? GAMES.filter(g => g.console === consoleHeader) : GAMES;
+  const scored = candidates.map(g => ({ g, score: lcsScore(target, squashText(g.title)) }))
+    .filter(x => x.score >= 0.45)
+    .sort((a, b) => b.score - a.score);
+  const seenTitles = new Set();
+  const results = [];
+  for (const { g } of scored) {
+    if (seenTitles.has(g.title)) continue;
+    seenTitles.add(g.title);
+    results.push(g);
+    if (results.length >= (limit || 5)) break;
+  }
+  return results;
+}
 function parsePasteList(text){
   const results = [];
   let currentConsole = null;
@@ -2044,57 +2120,193 @@ document.getElementById('paste-list-btn').addEventListener('click', () => {
   inputEl.value = '';
 });
 
-// ---------- Cover-photo scanning (OCR, on-device via self-hosted Tesseract.js) ----------
-// Keeps a few of the longest legible lines per photo (box titles are usually the most
-// prominent text, but plain OCR output doesn't preserve font size, so line length is
-// the best cheap proxy) and drops obvious junk (too short, no letters, barcode noise).
+// ---------- Scan games (barcode-first, on-device, self-hosted ZXing + Tesseract.js) ----------
+// Keeps a few of the longest legible OCR lines per photo (box titles are usually the most
+// prominent text, but plain OCR output doesn't preserve font size, so line length is the
+// best cheap proxy) and drops obvious junk (too short, no letters).
 function cleanOcrText(raw){
   const lines = raw.split('\n')
     .map(l => l.replace(/[^\w\s':&.-]/g, ' ').replace(/\s+/g, ' ').trim())
     .filter(l => l.length >= 3 && /[a-zA-Z]{2,}/.test(l));
   const unique = [...new Set(lines)];
   unique.sort((a,b) => b.length - a.length);
-  return unique.slice(0, 3).join('\n');
+  return unique.slice(0, 3);
 }
-document.getElementById('scan-cover-btn').addEventListener('click', () => {
-  document.getElementById('scan-cover-input').click();
-});
-document.getElementById('scan-cover-input').addEventListener('change', async (e) => {
-  const files = [...e.target.files];
-  e.target.value = ''; // allow re-selecting the same file next time
+async function decodeBarcodeFromFile(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const reader = new ZXing.BrowserMultiFormatReader();
+    const result = await reader.decodeFromImageUrl(url);
+    return result.getText();
+  } catch (err) {
+    return null; // covers "no barcode found" as well as any other decode failure
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+async function ocrGuessesFromFile(file, consoleHeader){
+  try {
+    const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+      // Must be absolute: Tesseract.js creates a nested worker whose relative-URL
+      // resolution isn't reliably the page's, so a bare relative path breaks there.
+      workerPath: new URL('vendor/tesseract/worker.min.js', document.baseURI).href,
+      corePath: new URL('vendor/tesseract/tesseract-core-simd-lstm.wasm.js', document.baseURI).href,
+      langPath: new URL('vendor/tesseract/', document.baseURI).href,
+      gzip: true
+    });
+    const lines = cleanOcrText(text);
+    const seen = new Set();
+    const guesses = [];
+    lines.forEach(line => {
+      fuzzyGuessCatalogMatches(line, consoleHeader, 3).forEach(g => {
+        const k = g.console + '|' + g.title;
+        if (!seen.has(k)) { seen.add(k); guesses.push(g); }
+      });
+    });
+    return guesses.slice(0, 5);
+  } catch (err) {
+    console.warn('OCR failed for photo', err);
+    return [];
+  }
+}
+
+let pendingScanRecords = [];
+let scanThumbUrls = [];
+
+function renderScanResultRow(record, idx, thumbUrl){
+  const resultsEl = document.getElementById('scan-results');
+  const thumb = `<img class="scan-thumb" src="${thumbUrl}" alt="">`;
+  let inner = '';
+  if (record.type === 'barcode-known') {
+    inner = `${thumb}<div class="row-main">
+      <div class="row-title">&#10003; ${escapeHtml(record.game.title)} (${escapeHtml(record.game.console)})</div>
+      <div class="row-sub">Matched via known barcode - added to cart</div>
+    </div>`;
+  } else if (record.type === 'barcode-new') {
+    inner = `${thumb}<div class="row-main">
+      <div class="row-title">New barcode</div>
+      <div class="row-sub">Haven't seen this one before - what game is it? We'll remember it next time.</div>
+      <input type="text" class="scan-resolve-input" data-scan-idx="${idx}" placeholder="Search title...">
+      <div class="scan-resolve-picks" data-scan-idx="${idx}"></div>
+    </div>`;
+  } else if (record.type === 'ocr-guess') {
+    const chips = record.guesses.map((g, j) =>
+      `<button class="note-chip" data-scan-idx="${idx}" data-guess-idx="${j}">${escapeHtml(g.console + ' - ' + g.title)}</button>`
+    ).join('');
+    inner = `${thumb}<div class="row-main">
+      <div class="row-title">No barcode - best guesses from the title</div>
+      <div class="row-sub">Tap the right one, or search below</div>
+      <div class="scan-resolve-picks">${chips}</div>
+      <input type="text" class="scan-resolve-input" data-scan-idx="${idx}" placeholder="Not it? Search title...">
+      <div class="scan-resolve-picks" data-scan-idx="${idx}"></div>
+    </div>`;
+  } else {
+    inner = `${thumb}<div class="row-main">
+      <div class="row-title">Couldn't identify this one</div>
+      <div class="row-sub">No barcode or readable text - try a clearer photo, or search below</div>
+      <input type="text" class="scan-resolve-input" data-scan-idx="${idx}" placeholder="Search title...">
+      <div class="scan-resolve-picks" data-scan-idx="${idx}"></div>
+    </div>`;
+  }
+  const row = document.createElement('div');
+  row.className = 'row scan-row';
+  row.setAttribute('data-scan-idx', idx);
+  row.innerHTML = inner;
+  resultsEl.appendChild(row);
+}
+function markScanRowResolved(idx, game, note){
+  const row = document.querySelector(`.scan-row[data-scan-idx="${idx}"]`);
+  if (!row) return;
+  const thumbImg = row.querySelector('.scan-thumb');
+  const thumb = thumbImg ? thumbImg.outerHTML : '';
+  row.innerHTML = `${thumb}<div class="row-main">
+    <div class="row-title">&#10003; ${escapeHtml(game.title)} (${escapeHtml(game.console)})</div>
+    <div class="row-sub">${escapeHtml(note)}</div>
+  </div>`;
+}
+
+async function handleScanFiles(fileList){
+  const files = [...fileList];
   if (!files.length) return;
   const statusEl = document.getElementById('scan-status');
+  const resultsEl = document.getElementById('scan-results');
   const consoleHeader = document.getElementById('scan-console-select').value;
-  const textarea = document.getElementById('paste-list-input');
   statusEl.style.display = 'block';
   statusEl.className = 'variety-note neutral';
-  const foundBlocks = [];
+  resultsEl.innerHTML = '';
+  scanThumbUrls.forEach(u => URL.revokeObjectURL(u));
+  scanThumbUrls = [];
+  pendingScanRecords = [];
+  let matchedCount = 0, needsAttention = 0;
   for (let i = 0; i < files.length; i++) {
     statusEl.textContent = `Scanning photo ${i + 1} of ${files.length}...`;
-    try {
-      const { data: { text } } = await Tesseract.recognize(files[i], 'eng', {
-        // Must be absolute: Tesseract.js creates a nested worker whose relative-URL
-        // resolution isn't reliably the page's, so a bare relative path breaks there.
-        workerPath: new URL('vendor/tesseract/worker.min.js', document.baseURI).href,
-        corePath: new URL('vendor/tesseract/tesseract-core-simd-lstm.wasm.js', document.baseURI).href,
-        langPath: new URL('vendor/tesseract/', document.baseURI).href,
-        gzip: true
-      });
-      const cleaned = cleanOcrText(text);
-      if (cleaned) foundBlocks.push(cleaned);
-    } catch (err) {
-      console.warn('OCR failed for photo', i, err);
+    const thumbUrl = URL.createObjectURL(files[i]);
+    scanThumbUrls.push(thumbUrl);
+    let record;
+    const barcode = await decodeBarcodeFromFile(files[i]);
+    if (barcode) {
+      const known = lookupUpc(barcode);
+      record = known ? { type: 'barcode-known', barcode, game: known } : { type: 'barcode-new', barcode };
+    } else {
+      const guesses = await ocrGuessesFromFile(files[i], consoleHeader);
+      record = guesses.length ? { type: 'ocr-guess', guesses } : { type: 'none' };
     }
+    pendingScanRecords.push(record);
+    if (record.type === 'barcode-known') { addToCart(record.game); matchedCount++; }
+    else needsAttention++;
+    renderScanResultRow(record, i, thumbUrl);
   }
-  if (foundBlocks.length) {
-    let block = foundBlocks.join('\n');
-    if (consoleHeader) block = consoleHeader + ':\n' + block;
-    textarea.value = (textarea.value.trim() ? textarea.value.trim() + '\n\n' : '') + block;
-    statusEl.className = 'variety-note good';
-    statusEl.textContent = `Scanned ${foundBlocks.length} of ${files.length} photo(s) - review the text below before matching, OCR on box art won't always be clean.`;
-  } else {
-    statusEl.className = 'variety-note warn';
-    statusEl.textContent = "Couldn't read any text from that - try better lighting/angle, or just type the title below.";
+  statusEl.className = 'variety-note good';
+  statusEl.textContent = `Done - ${matchedCount} added automatically${needsAttention ? ', ' + needsAttention + ' need a quick check below' : ''}.`;
+}
+document.getElementById('scan-camera-btn').addEventListener('click', () => {
+  document.getElementById('scan-camera-input').click();
+});
+document.getElementById('scan-library-btn').addEventListener('click', () => {
+  document.getElementById('scan-library-input').click();
+});
+document.getElementById('scan-camera-input').addEventListener('change', (e) => {
+  handleScanFiles(e.target.files);
+  e.target.value = '';
+});
+document.getElementById('scan-library-input').addEventListener('change', (e) => {
+  handleScanFiles(e.target.files);
+  e.target.value = '';
+});
+// Delegated so it works for rows added dynamically across multiple scan batches.
+document.getElementById('scan-results').addEventListener('input', (e) => {
+  if (!e.target.classList.contains('scan-resolve-input')) return;
+  const idx = e.target.getAttribute('data-scan-idx');
+  const q = e.target.value.trim().toLowerCase();
+  const picksEl = document.querySelector(`.scan-resolve-picks[data-scan-idx="${idx}"]`);
+  if (!picksEl) return;
+  if (q.length < 2) { picksEl.innerHTML = ''; return; }
+  const consoleHeader = document.getElementById('scan-console-select').value;
+  let matches = GAMES.filter(g => matchesSearch(g.title, q) && (!consoleHeader || g.console === consoleHeader)).slice(0, 6);
+  if (!matches.length && consoleHeader) matches = GAMES.filter(g => matchesSearch(g.title, q)).slice(0, 6);
+  picksEl.innerHTML = matches.map(g =>
+    `<button class="note-chip" data-scan-idx="${idx}" data-resolve-idx="${g.idx}">${escapeHtml(g.console + ' - ' + g.title)}</button>`
+  ).join('');
+});
+document.getElementById('scan-results').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.hasAttribute('data-scan-idx')) return;
+  const idx = parseInt(btn.getAttribute('data-scan-idx'));
+  const record = pendingScanRecords[idx];
+  if (btn.hasAttribute('data-resolve-idx')) {
+    const game = GAMES[parseInt(btn.getAttribute('data-resolve-idx'))];
+    if (record && record.type === 'barcode-new') {
+      setUpcMapping(record.barcode, game);
+      addToCart(game);
+      markScanRowResolved(idx, game, 'Learned - this barcode will be instant next time.');
+    } else {
+      addToCart(game);
+      markScanRowResolved(idx, game, 'Added to cart.');
+    }
+  } else if (btn.hasAttribute('data-guess-idx')) {
+    const game = record.guesses[parseInt(btn.getAttribute('data-guess-idx'))];
+    addToCart(game);
+    markScanRowResolved(idx, game, 'Added to cart from your pick.');
   }
 });
 
@@ -2944,6 +3156,7 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
   document.getElementById('override-pct-label').textContent = buyDiscountPct;
   loadGenreOverrides();
   applyGenreOverrides();
+  loadUpcMap();
   loadLots();
   loadSavedQuotes();
   loadQuoteIntro();
