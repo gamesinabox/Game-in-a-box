@@ -7,7 +7,8 @@
 
 <!-- PWA: installable on iPhone home screen, works offline -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#A32323">
+<meta name="theme-color" content="#A32323" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1C1B18" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Game In A Box">
@@ -29,11 +30,79 @@
     --des-uncommon:#6B2A8C; --des-uncommon-bg:#EDE0F5;
     --warn:#A32323; --warn-bg:#FCE4D6;
     --good:#3F7A4C; --good-bg:#E2EFDA;
+    /* "Always max-contrast against the current page" chips - toast, bottom nav, a few dark
+       secondary buttons. These invert in dark mode instead of tracking --ink, since a literal
+       near-black chip would disappear against an already-dark page. */
+    --chip-bg:#1C1B19; --chip-ink:#FFFFFF;
+    --nav-bg:#1C1B19; --nav-text:#B7AFA0; --nav-active-text:#FFFFFF; --nav-active-bg:rgba(255,255,255,0.1); --nav-badge:#9FD6AC;
+    --accent-tint:#F0F6F3;
     --r-sm:8px; --r-md:12px; --r-lg:18px; --r-pill:999px;
     --sh-sm:0 1px 2px rgba(28,27,25,0.05), 0 1px 1px rgba(28,27,25,0.04);
     --sh-md:0 4px 14px rgba(28,27,25,0.08), 0 1px 3px rgba(28,27,25,0.05);
     --sh-lift:0 8px 24px rgba(28,27,25,0.12);
     --ease:cubic-bezier(0.2,0.7,0.3,1);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#1C1B18; --surface:#262420; --field-bg:#2E2B25; --ink:#F0EDE6; --muted:#A79A89; --line:#3A362E;
+      --accent:#2FA184; --accent-2:#4DBBA0; --accent-ink:#FFFFFF;
+      --brand:#E2645A; --brand-ink:#FFFFFF;
+      --common:#7FC28C; --common-bg:#1E2E20;
+      --mid:#D4B04A; --mid-bg:#332B12;
+      --rare:#E08752; --rare-bg:#3A2418;
+      --grail:#E2645A; --grail-bg:#3A1F16;
+      --des-filler:#B0A99C; --des-filler-bg:#332F28;
+      --des-common:#6FA3D9; --des-common-bg:#1B2A3A;
+      --des-uncommon:#B47FD9; --des-uncommon-bg:#2C1B3A;
+      --warn:#E2645A; --warn-bg:#3A1F16;
+      --good:#7FC28C; --good-bg:#1E2E20;
+      --chip-bg:#F0EDE6; --chip-ink:#1C1B19;
+      --nav-bg:#2E2B25; --nav-text:#8F887A; --nav-active-text:#F0EDE6; --nav-active-bg:rgba(255,255,255,0.08); --nav-badge:#6FC28A;
+      --accent-tint:#16241F;
+      --sh-sm:0 1px 2px rgba(0,0,0,0.3), 0 1px 1px rgba(0,0,0,0.24);
+      --sh-md:0 4px 14px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+      --sh-lift:0 8px 24px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1C1B18; --surface:#262420; --field-bg:#2E2B25; --ink:#F0EDE6; --muted:#A79A89; --line:#3A362E;
+    --accent:#2FA184; --accent-2:#4DBBA0; --accent-ink:#FFFFFF;
+    --brand:#E2645A; --brand-ink:#FFFFFF;
+    --common:#7FC28C; --common-bg:#1E2E20;
+    --mid:#D4B04A; --mid-bg:#332B12;
+    --rare:#E08752; --rare-bg:#3A2418;
+    --grail:#E2645A; --grail-bg:#3A1F16;
+    --des-filler:#B0A99C; --des-filler-bg:#332F28;
+    --des-common:#6FA3D9; --des-common-bg:#1B2A3A;
+    --des-uncommon:#B47FD9; --des-uncommon-bg:#2C1B3A;
+    --warn:#E2645A; --warn-bg:#3A1F16;
+    --good:#7FC28C; --good-bg:#1E2E20;
+    --chip-bg:#F0EDE6; --chip-ink:#1C1B19;
+    --nav-bg:#2E2B25; --nav-text:#8F887A; --nav-active-text:#F0EDE6; --nav-active-bg:rgba(255,255,255,0.08); --nav-badge:#6FC28A;
+    --accent-tint:#16241F;
+    --sh-sm:0 1px 2px rgba(0,0,0,0.3), 0 1px 1px rgba(0,0,0,0.24);
+    --sh-md:0 4px 14px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+    --sh-lift:0 8px 24px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"]{
+    --bg:#F5F1E8; --surface:#FFFEFB; --field-bg:#FBF8F1; --ink:#1C1B19; --muted:#75695C; --line:#E7DFCF;
+    --accent:#2F5D50; --accent-2:#3E7566; --accent-ink:#FFFFFF;
+    --brand:#A32323; --brand-ink:#FFFFFF;
+    --common:#3F7A4C; --common-bg:#E2EFDA;
+    --mid:#8A6A16; --mid-bg:#FFF2CC;
+    --rare:#B5501E; --rare-bg:#FCE4D6;
+    --grail:#A32323; --grail-bg:#F8CBAD;
+    --des-filler:#6B645A; --des-filler-bg:#E8E6E1;
+    --des-common:#2A5A8C; --des-common-bg:#DCE8F5;
+    --des-uncommon:#6B2A8C; --des-uncommon-bg:#EDE0F5;
+    --warn:#A32323; --warn-bg:#FCE4D6;
+    --good:#3F7A4C; --good-bg:#E2EFDA;
+    --chip-bg:#1C1B19; --chip-ink:#FFFFFF;
+    --nav-bg:#1C1B19; --nav-text:#B7AFA0; --nav-active-text:#FFFFFF; --nav-active-bg:rgba(255,255,255,0.1); --nav-badge:#9FD6AC;
+    --accent-tint:#F0F6F3;
+    --sh-sm:0 1px 2px rgba(28,27,25,0.05), 0 1px 1px rgba(28,27,25,0.04);
+    --sh-md:0 4px 14px rgba(28,27,25,0.08), 0 1px 3px rgba(28,27,25,0.05);
+    --sh-lift:0 8px 24px rgba(28,27,25,0.12);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
@@ -90,6 +159,21 @@
     background:none; border:none; color:var(--accent); font-size:0.74rem;
     text-decoration:underline; cursor:pointer; font-family:inherit; white-space:nowrap;
   }
+  .settings-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md);
+    padding:14px; margin-bottom:4px; box-shadow:var(--sh-sm);
+  }
+  .settings-hint{ margin:8px 0 0; font-size:0.74rem; color:var(--muted); line-height:1.4; }
+  .settings-card > .settings-hint:first-child{ margin-top:0; }
+  .segmented{
+    display:flex; background:var(--field-bg); border:1px solid var(--line); border-radius:var(--r-md); padding:3px; gap:3px;
+  }
+  .segmented button{
+    flex:1; padding:9px 8px; border:none; background:none; border-radius:calc(var(--r-md) - 3px);
+    font-family:inherit; font-size:0.84rem; font-weight:600; color:var(--muted); cursor:pointer;
+    transition:background 0.15s var(--ease), color 0.15s var(--ease);
+  }
+  .segmented button.active{ background:var(--surface); color:var(--ink); box-shadow:var(--sh-sm); }
   .count-line{ font-size:0.76rem; color:var(--muted); padding:8px 18px 0; }
   main{padding:12px 14px 6px;}
 
@@ -106,6 +190,26 @@
   .scan-resolve-input{width:100%; margin-top:6px;}
   .scan-resolve-picks{margin-top:6px;}
   .scan-resolve-picks:empty{margin-top:0;}
+  .inv-condition-note{
+    width:100%; margin-top:5px; font-family:inherit; font-size:0.76rem; padding:6px 8px;
+    border:1px solid var(--line); border-radius:7px; background:var(--field-bg); color:var(--ink); resize:vertical;
+  }
+  .inv-photo-row{ display:flex; gap:6px; margin-top:6px; }
+  .inv-photo-thumb{
+    width:52px; height:52px; object-fit:cover; border-radius:7px; border:1px solid var(--line);
+    background:var(--field-bg); cursor:pointer;
+  }
+  #photo-viewer-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:80;
+    align-items:center; justify-content:center; flex-direction:column; padding:20px;
+  }
+  #photo-viewer-img{ max-width:100%; max-height:80vh; border-radius:10px; }
+  #photo-viewer-label{ color:#fff; font-size:0.8rem; margin-top:12px; text-transform:capitalize; }
+  #photo-viewer-close{
+    position:absolute; top:calc(16px + env(safe-area-inset-top, 0px)); right:16px;
+    width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.15); color:#fff; border:none;
+    font-size:1.4rem; line-height:1; cursor:pointer;
+  }
   .live-scan-video-wrap{ position:relative; background:#000; flex-shrink:0; height:min(52vh, 440px); }
   #live-scan-video{ width:100%; height:100%; object-fit:cover; display:block; background:#000; }
   .live-scan-reticle{
@@ -119,6 +223,38 @@
     font-size:1.4rem; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
   }
   #live-scan-session-list .row-sub{ padding:6px 0; border-bottom:1px dashed var(--line); }
+  .sheet-handle{ width:36px; height:4px; background:var(--line); border-radius:999px; margin:10px auto 0; }
+  .sheet-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:calc(14px + env(safe-area-inset-top, 0px)) 18px 12px; border-bottom:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .sheet-header h2{ margin:0; font-size:1.05rem; }
+  .sheet-header button{
+    background:var(--field-bg); border:1px solid var(--line); color:var(--ink); font-family:inherit;
+    font-size:0.8rem; font-weight:600; padding:7px 12px; border-radius:var(--r-pill); cursor:pointer;
+  }
+  .receiving-photo-grid{ display:flex; gap:10px; margin:8px 0 4px; }
+  .receiving-photo-slot{
+    flex:1; aspect-ratio:1; border-radius:var(--r-md); border:2px dashed var(--line); background:var(--field-bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    font-family:inherit; font-size:0.72rem; font-weight:600; color:var(--muted); cursor:pointer;
+    overflow:hidden; position:relative; padding:0; text-transform:capitalize;
+  }
+  .receiving-photo-slot.filled{ border-style:solid; border-color:var(--accent); }
+  .receiving-photo-slot img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+  .receiving-photo-slot .slot-icon{ font-size:1.4rem; }
+  .receiving-photo-slot .slot-label{ position:relative; z-index:1; }
+  .receiving-photo-slot.filled .slot-label{ background:rgba(0,0,0,0.6); color:#fff; padding:2px 9px; border-radius:999px; }
+  .resume-banner{
+    display:flex; align-items:center; gap:10px; background:var(--mid-bg); border:1px solid var(--mid);
+    border-radius:var(--r-md); padding:11px 13px; margin-bottom:14px;
+  }
+  .resume-banner p{ margin:0; flex:1; font-size:0.8rem; color:var(--ink); line-height:1.4; }
+  .resume-banner button{
+    background:var(--chip-bg); color:var(--chip-ink); border:none; font-family:inherit; font-weight:600; font-size:0.78rem;
+    padding:8px 12px; border-radius:var(--r-pill); cursor:pointer; flex-shrink:0;
+  }
   .badge{
     font-size:0.64rem; font-weight:600; padding:2px 7px; border-radius:999px;
     white-space:nowrap; text-transform:uppercase; letter-spacing:0.02em;
@@ -175,7 +311,7 @@
   }
   .row-editing{
     flex-direction:column; align-items:stretch; gap:8px;
-    border-color:var(--accent); background:#F5FAF8;
+    border-color:var(--accent); background:var(--accent-tint);
   }
   .edit-fields{display:flex; gap:10px; margin-top:6px;}
   .edit-fields label{
@@ -209,17 +345,12 @@
 
   .brand-row{ display:flex; align-items:center; gap:10px; }
   .brand-logo{ width:32px; height:32px; border-radius:var(--r-sm); flex-shrink:0; box-shadow:var(--sh-sm); }
-
-  .header-actions{
-    display:flex; gap:8px; margin-top:12px;
+  .settings-gear-btn{
+    margin-left:auto; width:36px; height:36px; border-radius:var(--r-pill); border:1px solid var(--line);
+    background:var(--field-bg); color:var(--ink); font-size:1.1rem; cursor:pointer; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
   }
-  .header-actions button, .header-actions label{
-    background:var(--field-bg); border:1px solid var(--line); color:var(--accent); font-size:0.78rem;
-    font-weight:600; cursor:pointer; font-family:inherit; padding:8px 13px; border-radius:var(--r-pill);
-    display:inline-flex; align-items:center; gap:4px;
-    transition:background 0.15s var(--ease), transform 0.1s var(--ease);
-  }
-  .header-actions button:active, .header-actions label:active{ background:var(--des-common-bg); transform:scale(0.97); }
+  .settings-gear-btn:active{ transform:scale(0.95); }
   #storage-warning{
     display:none;
     background:var(--warn-bg); color:var(--warn); font-size:0.78rem; line-height:1.4;
@@ -230,7 +361,7 @@
   #toast{
     position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom, 0px));
     transform:translateX(-50%) translateY(10px);
-    background:var(--ink); color:#fff; font-size:0.82rem; line-height:1.3;
+    background:var(--chip-bg); color:var(--chip-ink); font-size:0.82rem; line-height:1.3;
     padding:10px 16px; border-radius:var(--r-md); box-shadow:var(--sh-lift);
     max-width:88vw; text-align:center; z-index:70;
     opacity:0; pointer-events:none; transition:opacity 0.2s ease, transform 0.2s ease;
@@ -261,7 +392,7 @@
   .custom-add-row input[type="text"]{flex:2;}
   .custom-add-row input[type="number"]{flex:1; width:0;}
   .custom-add-row button{
-    border:none; background:var(--ink); color:#fff; border-radius:var(--r-sm); padding:0 14px;
+    border:none; background:var(--chip-bg); color:var(--chip-ink); border-radius:var(--r-sm); padding:0 14px;
     font-family:inherit; font-weight:600; cursor:pointer; transition:transform 0.1s var(--ease), opacity 0.15s var(--ease);
   }
   .custom-add-row button:active{ transform:scale(0.96); opacity:0.9; }
@@ -329,7 +460,7 @@
     align-items:center; justify-content:center; background:var(--surface); position:relative;
     transition:border-color 0.2s var(--ease), background 0.2s var(--ease);
   }
-  .slot.filled{border-style:solid; border-color:var(--accent); background:#EEF4F1; box-shadow:var(--sh-sm);}
+  .slot.filled{border-style:solid; border-color:var(--accent); background:var(--accent-tint); box-shadow:var(--sh-sm);}
   .slot .slot-title{font-size:0.74rem; font-weight:600; line-height:1.25;}
   .slot .slot-empty{font-size:0.74rem; color:var(--muted);}
   .slot .slot-remove{
@@ -349,12 +480,12 @@
 
   #bottom-tabs{
     position:fixed; bottom:10px; left:10px; right:10px; display:flex;
-    background:var(--ink); z-index:20; box-shadow:var(--sh-lift);
+    background:var(--nav-bg); z-index:20; box-shadow:var(--sh-lift);
     margin-bottom:env(safe-area-inset-bottom, 0px); border-radius:var(--r-lg);
     padding:4px;
   }
   #bottom-tabs button{
-    flex:1; background:none; border:none; color:#B7AFA0; padding:9px 2px;
+    flex:1; background:none; border:none; color:var(--nav-text); padding:9px 2px;
     font-family:inherit; font-size:0.66rem; font-weight:600; cursor:pointer;
     display:flex; flex-direction:column; align-items:center; gap:3px;
     border-radius:calc(var(--r-lg) - 4px); transition:color 0.15s var(--ease), background 0.15s var(--ease);
@@ -362,10 +493,10 @@
   }
   #bottom-tabs button .tab-icon{ line-height:1; display:flex; transition:transform 0.15s var(--ease); }
   #bottom-tabs button .tab-icon svg{ width:21px; height:21px; display:block; }
-  #bottom-tabs button.active{color:#fff; background:rgba(255,255,255,0.1);}
+  #bottom-tabs button.active{color:var(--nav-active-text); background:var(--nav-active-bg);}
   #bottom-tabs button.active .tab-icon{ transform:translateY(-1px); }
   #bottom-tabs button .tab-badge{
-    font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:0.64rem; color:#9FD6AC;
+    font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:0.64rem; color:var(--nav-badge);
   }
   .loading-note{ text-align:center; color:var(--muted); font-size:0.82rem; padding:30px; }
 </style>
@@ -376,14 +507,9 @@
   <div class="brand-row">
     <img src="icon-192.png" alt="" class="brand-logo">
     <h1>Game In A Box</h1>
+    <button id="open-settings-btn" class="settings-gear-btn" aria-label="Settings">&#9881;</button>
   </div>
   <p id="offline-status" style="margin:2px 0 0; font-size:0.76rem; color:var(--muted);"></p>
-  <div class="header-actions">
-    <button id="export-data-btn">&#8681; Export backup</button>
-    <label for="import-file-input">&#8679; Import backup
-      <input type="file" id="import-file-input" accept="application/json" style="display:none;">
-    </label>
-  </div>
   <details class="grading-info">
     <summary>What do the grades mean?</summary>
     <div class="grading-info-body">
@@ -445,12 +571,6 @@
       <select id="tier-filter"><option value="">All value tiers</option></select>
       <label class="filler-toggle"><input type="checkbox" id="hide-filler-filter"> Hide Filler Trash</label>
     </div>
-    <div class="override-row">
-      <label for="override-pct">Buy at <span id="override-pct-label">30</span>% under retail <span class="hint">saved as your default, applies everywhere</span></label>
-      <input type="number" id="override-pct" min="0" max="100" step="1">
-      <span style="color:var(--muted);font-size:0.9rem;">%</span>
-      <button class="clear-override" id="clear-override">reset to 30%</button>
-    </div>
   </div>
   <div class="count-line" id="count-line"></div>
   <main>
@@ -482,12 +602,13 @@
 <!-- CART & QUOTES TAB -->
 <div class="tab-panel" id="tab-cart">
   <main>
+    <div id="resume-receiving-container"></div>
     <div class="section-title">Scan games <span class="hint">barcode first (instant once it's learned a game), falls back to reading the title</span></div>
     <div class="controls" style="position:static; border:1px solid var(--line); border-radius:10px; margin-bottom:14px;">
       <div class="filters" style="margin-bottom:8px;">
         <select id="scan-console-select"><option value="">No console header (mixed consoles)</option></select>
       </div>
-      <button class="primary-btn" id="scan-live-btn" style="background:var(--ink);">&#127909; Live Scan (point &amp; go)</button>
+      <button class="primary-btn" id="scan-live-btn" style="background:var(--chip-bg); color:var(--chip-ink);">&#127909; Live Scan (point &amp; go)</button>
       <div class="filters" style="margin-top:8px;">
         <button class="primary-btn" id="scan-camera-btn" style="background:var(--accent); flex:1;">&#128247; Take Photo(s)</button>
         <button class="primary-btn" id="scan-library-btn" style="background:var(--accent-2); flex:1;">&#128444; From Library</button>
@@ -519,7 +640,7 @@
       <select id="quote-template-select" style="width:100%;"></select>
       <label style="display:block; font-size:0.76rem; color:var(--muted); margin-top:10px; margin-bottom:4px;">Your intro line <span class="hint">optional — saved automatically, replaces the style's opening line</span></label>
       <input type="text" id="quote-intro-input" placeholder="e.g. Hey, it's Keith from Game In A Box!" style="width:100%;">
-      <button class="primary-btn" id="quote-btn" style="background:var(--ink); margin-top:10px;">Generate quote to share</button>
+      <button class="primary-btn" id="quote-btn" style="background:var(--chip-bg); color:var(--chip-ink); margin-top:10px;">Generate quote to share</button>
       <button class="primary-btn" id="save-quote-btn" style="background:var(--accent);">Save this quote for later</button>
       <button class="primary-btn" id="commit-inventory-btn">Add all to inventory</button>
       <button class="clear-btn" id="clear-cart-btn">Clear this list</button>
@@ -552,7 +673,7 @@
     <button class="primary-btn" id="share-quote-seller-btn" style="background:var(--accent); display:none;">Send via Messages, WhatsApp...</button>
   </div>
   <div style="padding:14px 18px 20px; border-top:1px dashed var(--line);">
-    <button class="primary-btn" id="download-quote-btn" style="background:var(--ink);">&#8681; Download this quote as a file</button>
+    <button class="primary-btn" id="download-quote-btn" style="background:var(--chip-bg); color:var(--chip-ink);">&#8681; Download this quote as a file</button>
   </div>
 </div>
 
@@ -570,6 +691,79 @@
     <div class="section-title">Added this session <span class="hint" id="live-scan-count"></span></div>
     <div id="live-scan-session-list"></div>
   </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings-backdrop" style="display:none; position:fixed; inset:0; background:rgba(28,27,25,0.4); z-index:72;"></div>
+<div id="settings-sheet" style="display:none; position:fixed; left:0; right:0; bottom:0; top:6vh; background:var(--surface); border-radius:16px 16px 0 0; z-index:73; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,0.3);">
+  <div class="sheet-header">
+    <h2>Settings</h2>
+    <button id="close-settings">Close</button>
+  </div>
+  <div style="overflow-y:auto; flex:1; padding:14px 18px; padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));">
+
+    <div class="section-title" style="margin-top:0;">Backup</div>
+    <div class="settings-card">
+      <p class="settings-hint">Share this with your co-owner to keep both phones in sync. Nothing is overwritten wholesale &mdash; imports always merge.</p>
+      <button class="primary-btn" id="export-data-btn" style="margin-top:8px;">&#8681; Export backup</button>
+      <label for="import-file-input" class="primary-btn" style="background:var(--accent); display:block; text-align:center; cursor:pointer;">
+        &#8679; Import backup
+        <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+      </label>
+    </div>
+
+    <div class="section-title">Buying</div>
+    <div class="settings-card">
+      <div class="override-row" style="background:none; border:none; padding:0;">
+        <label for="override-pct">Buy at <span id="override-pct-label">30</span>% under retail <span class="hint">saved as your default, applies everywhere</span></label>
+        <input type="number" id="override-pct" min="0" max="100" step="1">
+        <span style="color:var(--muted);font-size:0.9rem;">%</span>
+        <button class="clear-override" id="clear-override">reset to 30%</button>
+      </div>
+    </div>
+
+    <div class="section-title">Appearance</div>
+    <div class="settings-card">
+      <div class="segmented" id="theme-picker">
+        <button data-theme-choice="auto" class="active">Auto</button>
+        <button data-theme-choice="light">Light</button>
+        <button data-theme-choice="dark">Dark</button>
+      </div>
+      <p class="settings-hint">Auto follows your phone's system setting.</p>
+    </div>
+
+    <div class="section-title">Who's using this device?</div>
+    <div class="settings-card">
+      <div class="segmented" id="identity-picker">
+        <button data-identity-choice="KJ">KJ</button>
+        <button data-identity-choice="KK">KK</button>
+      </div>
+      <p class="settings-hint">Used to record who received a lot when you sign off on it.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- PHOTO VIEWER -->
+<div id="photo-viewer-backdrop">
+  <button id="photo-viewer-close" aria-label="Close">&times;</button>
+  <img id="photo-viewer-img" alt="">
+  <div id="photo-viewer-label"></div>
+</div>
+
+<!-- RECEIVING WIZARD -->
+<div id="receiving-backdrop" style="display:none; position:fixed; inset:0; background:rgba(28,27,25,0.5); z-index:74;"></div>
+<div id="receiving-sheet" style="display:none; position:fixed; inset:0; z-index:75; background:var(--surface); flex-direction:column;">
+  <div class="sheet-header">
+    <h2 id="receiving-title">Receiving</h2>
+    <button id="close-receiving">Save &amp; exit</button>
+  </div>
+  <div style="flex:1; overflow-y:auto; padding:14px 18px;" id="receiving-body"></div>
+  <div style="padding:12px 18px; padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px)); border-top:1px solid var(--line); display:flex; gap:10px;">
+    <button class="clear-btn" id="receiving-back-btn" style="margin:0; flex:1;">&larr; Back</button>
+    <button class="primary-btn" id="receiving-next-btn" style="margin:0; flex:2;">Next &rarr;</button>
+  </div>
+  <input type="file" id="receiving-photo-input" accept="image/*" capture="environment" style="display:none;">
 </div>
 
 <!-- INVENTORY TAB -->
@@ -732,6 +926,10 @@ let loadedQuoteId = null;
 let quoteIntro = '';
 let quoteTemplateId = 'convenience';
 let cartEditingId = null;
+let invThumbUrls = [];
+let receivingSession = null;
+let receivingCaptureSlot = null;
+let receivingThumbUrls = [];
 let packSlots = [null, null, null];
 let bonusSlot = null;
 let priceOverrides = {};
@@ -756,6 +954,7 @@ const LS_QUOTE_TEMPLATE = 'loosecart_quote_template';
 const LS_GENRE_OVERRIDES = 'loosecart_genre_overrides';
 const LS_BUY_DISCOUNT = 'loosecart_buy_discount_pct';
 const LS_UPC_MAP = 'loosecart_upc_map';
+const LS_RECEIVING_SESSION = 'loosecart_receiving_session';
 
 let storageAvailable = true;
 let memoryFallback = {};
@@ -1173,21 +1372,55 @@ function mergePriceOverrides(theirOverrides, theirCleared){
 }
 
 // ---------- Export / import (backup) ----------
-function exportData(){
+function gatherReferencedPhotoIds(){
+  const ids = new Set();
+  inventory.forEach(it => {
+    if (it.photos) Object.values(it.photos).forEach(pid => { if (pid) ids.add(pid); });
+  });
+  return [...ids];
+}
+async function gatherPhotosAsBase64(){
+  const ids = await gatherReferencedPhotoIds();
+  const result = {};
+  for (const id of ids) {
+    const blob = await getPhotoBlob(id);
+    if (blob) result[id] = await blobToDataUrl(blob);
+  }
+  return result;
+}
+async function exportData(){
+  showToast('Preparing backup...', 15000);
+  const photos = await gatherPhotosAsBase64();
   const payload = {
     exportedAt: new Date().toISOString(),
     inventory, packedSummary, priceOverrides, clearedOverrides, removedItemIds, lots, catalogAdditions, savedQuotes,
-    priceHistory, soldArchive, packedBoxes, genreOverrides, upcMap
+    priceHistory, soldArchive, packedBoxes, genreOverrides, upcMap, photos
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+  const filename = 'game-in-a-box-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+
+  // Native share sheet first (AirDrop/Messages/etc in one tap) - falls back to a plain download
+  // if unsupported (desktop, older browsers) or if the user cancels the share sheet.
+  const file = new File([blob], filename, {type: 'application/json'});
+  if (navigator.canShare && navigator.canShare({files: [file]})) {
+    try {
+      await navigator.share({files: [file], title: 'Game In A Box backup'});
+      showToast('Backup ready to share.', 3000);
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') { showToast('Share cancelled.', 2500); return; }
+      // fall through to plain download on any other share failure
+    }
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'game-in-a-box-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  showToast('Backup downloaded.', 3000);
 }
 
 // Merge someone else's inventory into ours - union by id, respecting tombstones (deleted/packed items
@@ -1236,9 +1469,23 @@ function mergeLots(theirLots){
   return added;
 }
 
+async function restorePhotosFromBackup(photosMap){
+  if (!photosMap) return 0;
+  let added = 0;
+  for (const [id, dataUrl] of Object.entries(photosMap)) {
+    const existing = await getPhotoBlob(id);
+    if (existing) continue; // already have it - skip re-decoding/re-writing
+    try {
+      const blob = await dataUrlToBlob(dataUrl);
+      await savePhotoBlob(id, blob);
+      added++;
+    } catch (e) { console.warn('failed to restore photo', id, e); }
+  }
+  return added;
+}
 function importData(file){
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
       if (Array.isArray(data.games)) {
@@ -1264,6 +1511,7 @@ function importData(file){
       if (Array.isArray(data.catalogAdditions)) { mergeCatalogUpdate(data.catalogAdditions); }
       const genresAdded = data.genreOverrides ? mergeGenreOverrides(data.genreOverrides) : 0;
       const upcsAdded = data.upcMap ? mergeUpcMap(data.upcMap) : 0;
+      const photosAdded = await restorePhotosFromBackup(data.photos);
       if (data.packedSummary && data.packedSummary.count > packedSummary.count) {
         // Use whichever summary reflects more packed boxes - both devices pack independently, take the larger tally
         packedSummary = data.packedSummary;
@@ -1289,7 +1537,8 @@ function importData(file){
       updateNavBadge(); renderResults(); renderCart(); renderInventoryTab(); renderCheckedStat(); renderSavedQuotes(); renderPackTab(); renderDashboardTab();
       showToast('Merged: ' + invResult.added + ' new inventory items, ' + invResult.updated + ' updated, ' +
             priceResult.applied + ' price updates applied (' + priceResult.kept + ' of yours kept as newer), ' +
-            lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes, ' + genresAdded + ' genre tags, ' + upcsAdded + ' learned barcodes. Nothing was overwritten wholesale.', 6000);
+            lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes, ' + genresAdded + ' genre tags, ' +
+            upcsAdded + ' learned barcodes, ' + photosAdded + ' condition photos. Nothing was overwritten wholesale.', 6500);
     } catch(err) {
       showToast('Could not read that file - make sure it\'s a Game In A Box backup or catalog-update JSON.', 5000);
     }
@@ -2199,6 +2448,78 @@ function drawToCanvas(img, rotationDeg, maxDim){
   ctx.restore();
   return canvas;
 }
+
+// ---------- Condition photos (IndexedDB, not localStorage - photos are too big for that) ----------
+const PHOTO_DB_NAME = 'gameInABoxPhotos';
+const PHOTO_STORE = 'photos';
+let photoDbPromise = null;
+function openPhotoDb(){
+  if (photoDbPromise) return photoDbPromise;
+  photoDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(PHOTO_DB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(PHOTO_STORE, { keyPath: 'id' }); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return photoDbPromise;
+}
+async function savePhotoBlob(id, blob){
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readwrite');
+    tx.objectStore(PHOTO_STORE).put({ id, blob, createdAt: new Date().toISOString() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function getPhotoBlob(id){
+  if (!id) return null;
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readonly');
+    const req = tx.objectStore(PHOTO_STORE).get(id);
+    req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function deletePhotoBlob(id){
+  if (!id) return;
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readwrite');
+    tx.objectStore(PHOTO_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+// Resize to a max ~1280px edge and compress to JPEG ~80% - keeps individual condition photos
+// around 150-350KB. Enough to see scratches, cracks, missing labels; not enough to zoom in on a
+// hairline scratch, which is a deliberate trade so backups stay shareable as photo use grows.
+async function compressPhotoFile(file){
+  const img = await loadImageFromFile(file);
+  const canvas = drawToCanvas(img, 0, 1280);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('compression failed')), 'image/jpeg', 0.8);
+  });
+}
+async function capturePhotoForSlot(file){
+  const blob = await compressPhotoFile(file);
+  const id = uid();
+  await savePhotoBlob(id, blob);
+  return id;
+}
+function blobToDataUrl(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+function dataUrlToBlob(dataUrl){
+  return fetch(dataUrl).then(r => r.blob());
+}
+
 async function decodeBarcodeFromFile(file){
   let img;
   try { img = await loadImageFromFile(file); }
@@ -2532,39 +2853,239 @@ document.getElementById('clear-override').addEventListener('click', () => {
   renderResults();
 });
 
-document.getElementById('commit-inventory-btn').addEventListener('click', async () => {
-  if (cart.length === 0) return;
-  const now = new Date().toISOString();
+// ---------- Receiving checklist wizard ----------
+// Replaces instant "Add all to inventory": each item must get front/back/disc photos and a
+// manual yes/no answer before it counts as checked. Progress is saved after every change so an
+// interrupted receiving session (phone locks, app backgrounds) can be resumed, not lost.
+function loadReceivingSession(){
+  try {
+    const raw = lsGet(LS_RECEIVING_SESSION);
+    receivingSession = raw ? JSON.parse(raw) : null;
+  } catch(e){ receivingSession = null; }
+}
+function saveReceivingSessionState(){
+  try { lsSet(LS_RECEIVING_SESSION, receivingSession ? JSON.stringify(receivingSession) : ''); }
+  catch(e){ console.error('receiving session save failed', e); }
+}
+function renderResumeBanner(){
+  const el = document.getElementById('resume-receiving-container');
+  if (!el) return;
+  if (!receivingSession || !receivingSession.items || !receivingSession.items.length){
+    el.innerHTML = '';
+    return;
+  }
+  const total = receivingSession.items.length;
+  const done = Math.min(receivingSession.index, total);
+  el.innerHTML = `<div class="resume-banner">
+    <p>In-progress receiving: <strong>${escapeHtml(receivingSession.lotLabel)}</strong> &mdash; ${done} of ${total} items checked</p>
+    <button id="resume-receiving-btn">Resume</button>
+  </div>`;
+  document.getElementById('resume-receiving-btn').addEventListener('click', openReceivingSheet);
+}
+function startReceivingSession(){
   const labelInput = document.getElementById('lot-label-input');
-  const totalPaid = cart.reduce((s,c) => s + (parseFloat(c.price)||0), 0);
+  receivingSession = {
+    lotLabel: labelInput.value.trim() || ('Lot - ' + new Date().toLocaleDateString('en-AU')),
+    items: cart.map(c => ({
+      tempId: c.tempId, console: c.console, genre: c.genre, title: c.title, tier: c.tier,
+      filler: c.filler, aud: c.aud, price: c.price,
+      photos: { front: null, back: null, disc: null },
+      manualIncluded: null, conditionNote: '', notes: []
+    })),
+    index: 0,
+    loadedQuoteId: loadedQuoteId
+  };
+  saveReceivingSessionState();
+  openReceivingSheet();
+}
+function isReceivingItemComplete(item){
+  return !!(item.photos.front && item.photos.back && item.photos.disc && item.manualIncluded !== null);
+}
+function openReceivingSheet(){
+  if (!receivingSession) return;
+  document.getElementById('receiving-backdrop').style.display = 'block';
+  document.getElementById('receiving-sheet').style.display = 'flex';
+  renderReceivingStep();
+}
+function closeReceivingSheet(){
+  document.getElementById('receiving-backdrop').style.display = 'none';
+  document.getElementById('receiving-sheet').style.display = 'none';
+  renderResumeBanner();
+}
+function renderReceivingStep(){
+  const body = document.getElementById('receiving-body');
+  const titleEl = document.getElementById('receiving-title');
+  const backBtn = document.getElementById('receiving-back-btn');
+  const nextBtn = document.getElementById('receiving-next-btn');
+  const total = receivingSession.items.length;
+  backBtn.disabled = receivingSession.index === 0;
+
+  receivingThumbUrls.forEach(u => URL.revokeObjectURL(u));
+  receivingThumbUrls = [];
+
+  if (receivingSession.index >= total){
+    titleEl.textContent = 'Ready to receive';
+    const flaggedCount = receivingSession.items.filter(it => (it.notes && it.notes.length) || (it.conditionNote && it.conditionNote.trim())).length;
+    body.innerHTML = `
+      <div class="variety-note neutral">Receiving as <strong>${escapeHtml(deviceIdentity)}</strong></div>
+      <div class="stats-strip" style="margin-top:12px;">
+        <div class="stat-chip"><div class="stat-num">${total}</div><div class="stat-label">Items checked</div></div>
+        <div class="stat-chip"><div class="stat-num">${flaggedCount}</div><div class="stat-label">Flagged with notes</div></div>
+      </div>
+    `;
+    nextBtn.textContent = 'Confirm receipt';
+    nextBtn.disabled = false;
+    return;
+  }
+
+  const item = receivingSession.items[receivingSession.index];
+  titleEl.textContent = `Item ${receivingSession.index + 1} of ${total}`;
+  nextBtn.textContent = (receivingSession.index === total - 1) ? 'Review & sign off' : 'Next →';
+  nextBtn.disabled = !isReceivingItemComplete(item);
+
+  body.innerHTML = `
+    <div class="row" style="margin-bottom:16px;">
+      <div class="row-main">
+        <div class="row-title">${escapeHtml(item.title)}</div>
+        <div class="row-sub">${escapeHtml(item.console || 'Custom')} ${item.tier !== 'Custom' ? `<span class="${tierBadgeClass(item.tier)}">${escapeHtml(item.tier)}</span>` : ''}</div>
+      </div>
+    </div>
+    <div class="section-title" style="margin-top:0;">Photos <span class="hint">all three required</span></div>
+    <div class="receiving-photo-grid">
+      ${['front','back','disc'].map(slot => `
+        <button class="receiving-photo-slot${item.photos[slot] ? ' filled' : ''}" data-slot="${slot}" type="button">
+          <span class="slot-icon">${item.photos[slot] ? '' : '\u{1F4F7}'}</span>
+          <span class="slot-label">${slot}</span>
+        </button>
+      `).join('')}
+    </div>
+    <div class="section-title">Manual included?</div>
+    <div class="segmented" id="receiving-manual-picker">
+      <button data-manual-choice="yes" class="${item.manualIncluded === true ? 'active' : ''}" type="button">Yes</button>
+      <button data-manual-choice="no" class="${item.manualIncluded === false ? 'active' : ''}" type="button">No</button>
+    </div>
+    <div class="section-title">Condition <span class="hint">optional</span></div>
+    <div style="margin-bottom:8px;">
+      ${NOTE_OPTIONS.map(n => `<button class="note-chip${(item.notes||[]).includes(n) ? ' active' : ''}" data-note="${escapeHtml(n)}" type="button">${escapeHtml(n)}</button>`).join('')}
+    </div>
+    <textarea class="inv-condition-note" id="receiving-condition-note" placeholder="Anything else worth mentioning?">${escapeHtml(item.conditionNote || '')}</textarea>
+  `;
+
+  document.querySelectorAll('.receiving-photo-slot.filled').forEach(btn => {
+    const slot = btn.getAttribute('data-slot');
+    getPhotoBlob(item.photos[slot]).then(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      receivingThumbUrls.push(url);
+      const img = document.createElement('img');
+      img.src = url;
+      btn.prepend(img);
+    });
+  });
+  document.querySelectorAll('.receiving-photo-slot').forEach(btn => {
+    btn.addEventListener('click', () => {
+      receivingCaptureSlot = btn.getAttribute('data-slot');
+      document.getElementById('receiving-photo-input').click();
+    });
+  });
+  document.querySelectorAll('#receiving-manual-picker button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      item.manualIncluded = btn.getAttribute('data-manual-choice') === 'yes';
+      saveReceivingSessionState();
+      renderReceivingStep();
+    });
+  });
+  document.querySelectorAll('#receiving-body .note-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const note = btn.getAttribute('data-note');
+      if (!Array.isArray(item.notes)) item.notes = [];
+      if (item.notes.includes(note)) item.notes = item.notes.filter(n => n !== note);
+      else item.notes.push(note);
+      saveReceivingSessionState();
+      renderReceivingStep();
+    });
+  });
+  document.getElementById('receiving-condition-note').addEventListener('change', (e) => {
+    item.conditionNote = e.target.value;
+    saveReceivingSessionState();
+  });
+}
+async function confirmReceipt(){
+  const now = new Date().toISOString();
+  const totalPaid = receivingSession.items.reduce((s,it) => s + (parseFloat(it.price)||0), 0);
   const lot = {
-    id: uid(),
-    label: labelInput.value.trim() || ('Lot - ' + new Date().toLocaleDateString('en-AU')),
-    dateCreated: now,
-    totalPaid: totalPaid,
-    totalItems: cart.length
+    id: uid(), label: receivingSession.lotLabel, dateCreated: now,
+    totalPaid: totalPaid, totalItems: receivingSession.items.length
   };
   lots.push(lot);
   await saveLots();
 
-  cart.forEach(c => {
+  receivingSession.items.forEach(it => {
     inventory.push({
-      id: uid(), console: c.console, genre: c.genre, title: c.title, tier: c.tier,
-      filler: c.filler, paidPrice: parseFloat(c.price) || 0, sellPrice: c.aud, dateAdded: now,
-      lotId: lot.id, lotLabel: lot.label, reservedForSolo: false, updatedAt: now, notes: []
+      id: uid(), console: it.console, genre: it.genre, title: it.title, tier: it.tier,
+      filler: it.filler, paidPrice: parseFloat(it.price) || 0, sellPrice: it.aud, dateAdded: now,
+      lotId: lot.id, lotLabel: lot.label, reservedForSolo: false, updatedAt: now,
+      notes: it.notes || [], photos: it.photos, manualIncluded: it.manualIncluded,
+      conditionNote: it.conditionNote || '', receivedBy: deviceIdentity, receivedAt: now, checkedIn: true
     });
   });
   await saveInventory();
-  if (loadedQuoteId){
-    const q = savedQuotes.find(x => x.id === loadedQuoteId);
+
+  if (receivingSession.loadedQuoteId){
+    const q = savedQuotes.find(x => x.id === receivingSession.loadedQuoteId);
     if (q) { q.status = 'bought'; saveSavedQuotes(); renderSavedQuotes(); }
-    loadedQuoteId = null;
   }
+  loadedQuoteId = null;
+
+  const label = lot.label, count = lot.totalItems;
   cart = [];
-  labelInput.value = '';
+  document.getElementById('lot-label-input').value = '';
+  receivingSession = null;
+  saveReceivingSessionState();
   renderCart();
   updateNavBadge();
+  closeReceivingSheet();
   document.querySelector('#bottom-tabs button[data-tab="inventory"]').click();
+  showToast(`Received ${count} item${count === 1 ? '' : 's'} as "${label}".`, 4600);
+}
+document.getElementById('commit-inventory-btn').addEventListener('click', () => {
+  if (cart.length === 0) return;
+  if (receivingSession && receivingSession.items && receivingSession.items.length &&
+      !confirm(`You have an in-progress receiving session ("${receivingSession.lotLabel}") with unsaved checklist progress. Starting a new one will discard it. Continue?`)) {
+    return;
+  }
+  startReceivingSession();
+});
+document.getElementById('close-receiving').addEventListener('click', closeReceivingSheet);
+document.getElementById('receiving-back-btn').addEventListener('click', () => {
+  if (receivingSession.index > 0){
+    receivingSession.index--;
+    saveReceivingSessionState();
+    renderReceivingStep();
+  }
+});
+document.getElementById('receiving-next-btn').addEventListener('click', async () => {
+  const total = receivingSession.items.length;
+  if (receivingSession.index < total){
+    receivingSession.index++;
+    saveReceivingSessionState();
+    renderReceivingStep();
+  } else {
+    await confirmReceipt();
+  }
+});
+document.getElementById('receiving-photo-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const slot = receivingCaptureSlot; // capture now - receivingCaptureSlot can change during the await below
+  e.target.value = '';
+  if (!file || !receivingSession || slot === null) return;
+  const item = receivingSession.items[receivingSession.index];
+  const oldPhotoId = item.photos[slot];
+  const newPhotoId = await capturePhotoForSlot(file);
+  item.photos[slot] = newPhotoId;
+  if (oldPhotoId) await deletePhotoBlob(oldPhotoId);
+  saveReceivingSessionState();
+  renderReceivingStep();
 });
 
 function generateFriendQuoteText(){
@@ -2694,6 +3215,81 @@ document.getElementById('backdrop2').addEventListener('click', () => {
   document.getElementById('quote-sheet').style.display = 'none';
   document.getElementById('backdrop2').style.display = 'none';
 });
+
+// ---------- Settings ----------
+function closeSettingsSheet(){
+  document.getElementById('settings-sheet').style.display = 'none';
+  document.getElementById('settings-backdrop').style.display = 'none';
+}
+document.getElementById('open-settings-btn').addEventListener('click', () => {
+  document.getElementById('settings-sheet').style.display = 'flex';
+  document.getElementById('settings-backdrop').style.display = 'block';
+});
+document.getElementById('close-settings').addEventListener('click', closeSettingsSheet);
+document.getElementById('settings-backdrop').addEventListener('click', closeSettingsSheet);
+
+const LS_THEME = 'loosecart_theme_mode';
+let themeMode = 'auto';
+function loadThemeMode(){
+  const v = lsGet(LS_THEME);
+  themeMode = (v === 'light' || v === 'dark' || v === 'auto') ? v : 'auto';
+}
+function saveThemeMode(){
+  try { lsSet(LS_THEME, themeMode); } catch(e) { console.error('theme save failed', e); }
+}
+function applyThemeMode(){
+  if (themeMode === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', themeMode);
+  document.querySelectorAll('#theme-picker button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-theme-choice') === themeMode);
+  });
+}
+document.querySelectorAll('#theme-picker button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    themeMode = btn.getAttribute('data-theme-choice');
+    saveThemeMode();
+    applyThemeMode();
+  });
+});
+
+const LS_IDENTITY = 'loosecart_device_identity';
+let deviceIdentity = 'KJ';
+function loadDeviceIdentity(){
+  const v = lsGet(LS_IDENTITY);
+  deviceIdentity = (v === 'KJ' || v === 'KK') ? v : 'KJ';
+}
+function saveDeviceIdentity(){
+  try { lsSet(LS_IDENTITY, deviceIdentity); } catch(e) { console.error('identity save failed', e); }
+}
+function applyDeviceIdentity(){
+  document.querySelectorAll('#identity-picker button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-identity-choice') === deviceIdentity);
+  });
+}
+document.querySelectorAll('#identity-picker button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    deviceIdentity = btn.getAttribute('data-identity-choice');
+    saveDeviceIdentity();
+    applyDeviceIdentity();
+  });
+});
+
+// ---------- Photo viewer (delegated - thumbnails are added/removed dynamically) ----------
+function closePhotoViewer(){
+  document.getElementById('photo-viewer-backdrop').style.display = 'none';
+}
+document.addEventListener('click', (e) => {
+  const thumb = e.target.closest('.inv-photo-thumb');
+  if (!thumb || !thumb.src) return;
+  document.getElementById('photo-viewer-img').src = thumb.src;
+  document.getElementById('photo-viewer-label').textContent = thumb.getAttribute('data-slot') || '';
+  document.getElementById('photo-viewer-backdrop').style.display = 'flex';
+});
+document.getElementById('photo-viewer-close').addEventListener('click', closePhotoViewer);
+document.getElementById('photo-viewer-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'photo-viewer-backdrop') closePhotoViewer();
+});
+
 async function copyWithFeedback(btnId, textId){
   const text = document.getElementById(textId).textContent;
   const btn = document.getElementById(btnId);
@@ -2834,6 +3430,14 @@ function renderInventoryTab(){
         <div style="margin-top:4px;">
           ${NOTE_OPTIONS.map(n => `<button class="note-chip${(it.notes||[]).includes(n) ? ' active' : ''}" data-id="${it.id}" data-note="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}
         </div>
+        ${(it.manualIncluded != null || it.receivedBy) ? `<div class="cr-sub" style="margin-top:4px;">
+          ${it.manualIncluded != null ? (it.manualIncluded ? '<span class="edited-badge" style="background:var(--good-bg);color:var(--good);">Manual included</span>' : '<span class="edited-badge" style="background:var(--warn-bg);color:var(--warn);">No manual</span>') : ''}
+          ${it.receivedBy ? `Received by ${escapeHtml(it.receivedBy)}${it.receivedAt ? ' &middot; ' + new Date(it.receivedAt).toLocaleDateString('en-AU') : ''}` : ''}
+        </div>` : ''}
+        <textarea class="inv-condition-note" data-id="${it.id}" placeholder="Condition note (e.g. light scratches)..." rows="1">${escapeHtml(it.conditionNote || '')}</textarea>
+        ${(it.photos && (it.photos.front || it.photos.back || it.photos.disc)) ? `<div class="inv-photo-row" data-item-id="${it.id}">
+          ${['front','back','disc'].map(slot => it.photos[slot] ? `<img class="inv-photo-thumb" data-photo-id="${it.photos[slot]}" data-slot="${slot}" alt="${slot}">` : '').join('')}
+        </div>` : ''}
       </div>
       <div style="text-align:right;">
         <div class="price-buy">${fmt(it.paidPrice)}<span class="price-label">buy</span></div>
@@ -2896,6 +3500,26 @@ function renderInventoryTab(){
       it.updatedAt = new Date().toISOString();
       await saveInventory();
       renderInventoryTab();
+    });
+  });
+  listEl.querySelectorAll('.inv-condition-note').forEach(ta => {
+    ta.addEventListener('change', async () => {
+      const it = inventory.find(x => x.id === ta.getAttribute('data-id'));
+      if (!it) return;
+      it.conditionNote = ta.value;
+      it.updatedAt = new Date().toISOString();
+      await saveInventory();
+    });
+  });
+  invThumbUrls.forEach(u => URL.revokeObjectURL(u));
+  invThumbUrls = [];
+  listEl.querySelectorAll('.inv-photo-thumb').forEach(img => {
+    const photoId = img.getAttribute('data-photo-id');
+    getPhotoBlob(photoId).then(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      invThumbUrls.push(url);
+      img.src = url;
     });
   });
   renderSoldArchive();
@@ -3358,9 +3982,15 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
   loadBuyDiscountPct();
   document.getElementById('override-pct').value = buyDiscountPct;
   document.getElementById('override-pct-label').textContent = buyDiscountPct;
+  loadThemeMode();
+  applyThemeMode();
+  loadDeviceIdentity();
+  applyDeviceIdentity();
   loadGenreOverrides();
   applyGenreOverrides();
   loadUpcMap();
+  loadReceivingSession();
+  renderResumeBanner();
   loadLots();
   loadSavedQuotes();
   loadQuoteIntro();
