@@ -106,6 +106,19 @@
   .scan-resolve-input{width:100%; margin-top:6px;}
   .scan-resolve-picks{margin-top:6px;}
   .scan-resolve-picks:empty{margin-top:0;}
+  .live-scan-video-wrap{ position:relative; background:#000; flex-shrink:0; height:min(52vh, 440px); }
+  #live-scan-video{ width:100%; height:100%; object-fit:cover; display:block; background:#000; }
+  .live-scan-reticle{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:74%; height:32%; border:3px solid rgba(255,255,255,0.9); border-radius:14px;
+    box-shadow:0 0 0 999px rgba(0,0,0,0.4); pointer-events:none;
+  }
+  .live-scan-close-btn{
+    position:absolute; top:calc(10px + env(safe-area-inset-top, 0px)); right:10px;
+    width:38px; height:38px; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; border:none;
+    font-size:1.4rem; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  #live-scan-session-list .row-sub{ padding:6px 0; border-bottom:1px dashed var(--line); }
   .badge{
     font-size:0.64rem; font-weight:600; padding:2px 7px; border-radius:999px;
     white-space:nowrap; text-transform:uppercase; letter-spacing:0.02em;
@@ -474,7 +487,8 @@
       <div class="filters" style="margin-bottom:8px;">
         <select id="scan-console-select"><option value="">No console header (mixed consoles)</option></select>
       </div>
-      <div class="filters">
+      <button class="primary-btn" id="scan-live-btn" style="background:var(--ink);">&#127909; Live Scan (point &amp; go)</button>
+      <div class="filters" style="margin-top:8px;">
         <button class="primary-btn" id="scan-camera-btn" style="background:var(--accent); flex:1;">&#128247; Take Photo(s)</button>
         <button class="primary-btn" id="scan-library-btn" style="background:var(--accent-2); flex:1;">&#128444; From Library</button>
       </div>
@@ -539,6 +553,22 @@
   </div>
   <div style="padding:14px 18px 20px; border-top:1px dashed var(--line);">
     <button class="primary-btn" id="download-quote-btn" style="background:var(--ink);">&#8681; Download this quote as a file</button>
+  </div>
+</div>
+
+<!-- LIVE SCAN OVERLAY -->
+<div id="live-scan-backdrop" style="display:none; position:fixed; inset:0; background:#000; z-index:70;"></div>
+<div id="live-scan-sheet" style="display:none; position:fixed; inset:0; z-index:71; background:var(--surface); flex-direction:column;">
+  <div class="live-scan-video-wrap">
+    <video id="live-scan-video" autoplay playsinline muted></video>
+    <div class="live-scan-reticle"></div>
+    <button id="live-scan-close" class="live-scan-close-btn" aria-label="Close live scan">&times;</button>
+  </div>
+  <div style="flex:1; overflow-y:auto; padding:14px 18px; padding-bottom:calc(14px + env(safe-area-inset-bottom, 0px));">
+    <div class="variety-note neutral" id="live-scan-status">Point your camera at a barcode</div>
+    <div id="live-scan-resolve-area"></div>
+    <div class="section-title">Added this session <span class="hint" id="live-scan-count"></span></div>
+    <div id="live-scan-session-list"></div>
   </div>
 </div>
 
@@ -1395,6 +1425,7 @@ document.getElementById('dash-goto-pack').addEventListener('click', () => docume
 // ---------- Tab navigation ----------
 document.querySelectorAll('#bottom-tabs button').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (liveScanReader) stopLiveScan(); // don't leave the camera running in the background
     document.querySelectorAll('#bottom-tabs button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -2132,17 +2163,69 @@ function cleanOcrText(raw){
   unique.sort((a,b) => b.length - a.length);
   return unique.slice(0, 3);
 }
+function loadImageFromFile(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+    img.src = url;
+  });
+}
+function canvasToImageElement(canvas){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = canvas.toDataURL('image/jpeg', 0.92);
+  });
+}
+// Real phone photos are huge (slow to scan, sometimes worse for decoding) and can be held at
+// any rotation - a single straight-through pass at full size is what was failing on real box
+// photos even though the exact same file always decoded the same way twice. Downscale for
+// speed, and retry a few rotations since a game box isn't always framed perfectly level.
+function drawToCanvas(img, rotationDeg, maxDim){
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const scale = Math.min(1, maxDim / Math.max(w, h));
+  const dw = Math.round(w * scale), dh = Math.round(h * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = (rotationDeg === 90 || rotationDeg === 270) ? dh : dw;
+  canvas.height = (rotationDeg === 90 || rotationDeg === 270) ? dw : dh;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(rotationDeg * Math.PI / 180);
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
+  return canvas;
+}
 async function decodeBarcodeFromFile(file){
-  const url = URL.createObjectURL(file);
-  try {
-    const reader = new ZXing.BrowserMultiFormatReader();
-    const result = await reader.decodeFromImageUrl(url);
-    return result.getText();
-  } catch (err) {
-    return null; // covers "no barcode found" as well as any other decode failure
-  } finally {
-    URL.revokeObjectURL(url);
+  let img;
+  try { img = await loadImageFromFile(file); }
+  catch (e) { return null; }
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.EAN_8
+  ]);
+  const reader = new ZXing.BrowserMultiFormatReader(hints);
+  // Two size passes: downscaled first (fast, handles a barcode filling most of the frame),
+  // then native resolution as a fallback (slower, but preserves fine bar detail when the
+  // barcode is small within a wider photo - downscaling that case can blur it past legibility).
+  for (const maxDim of [1600, Math.max(img.naturalWidth, img.naturalHeight)]) {
+    for (const rotation of [0, 90, 270, 180]) {
+      try {
+        const canvas = drawToCanvas(img, rotation, maxDim);
+        const rotatedImg = await canvasToImageElement(canvas);
+        const result = await reader.decodeFromImageElement(rotatedImg);
+        if (result) return result.getText();
+      } catch (err) {
+        // no barcode at this rotation/size - try the next one
+      }
+    }
   }
+  return null;
 }
 async function ocrGuessesFromFile(file, consoleHeader){
   try {
@@ -2309,6 +2392,127 @@ document.getElementById('scan-results').addEventListener('click', (e) => {
     markScanRowResolved(idx, game, 'Added to cart from your pick.');
   }
 });
+
+// ---------- Live scan (continuous camera decode via self-hosted ZXing) ----------
+let liveScanReader = null;
+let liveScanLastCode = null;
+let liveScanSawGapSinceLastAdd = true;
+let liveScanResolving = false;
+let liveScanSessionCount = 0;
+
+async function startLiveScan(){
+  const backdrop = document.getElementById('live-scan-backdrop');
+  const sheet = document.getElementById('live-scan-sheet');
+  const statusEl = document.getElementById('live-scan-status');
+  const video = document.getElementById('live-scan-video');
+  liveScanLastCode = null;
+  liveScanSawGapSinceLastAdd = true;
+  liveScanResolving = false;
+  liveScanSessionCount = 0;
+  document.getElementById('live-scan-session-list').innerHTML = '';
+  document.getElementById('live-scan-count').textContent = '';
+  document.getElementById('live-scan-resolve-area').innerHTML = '';
+  statusEl.className = 'variety-note neutral';
+  statusEl.textContent = 'Starting camera...';
+  backdrop.style.display = 'block';
+  sheet.style.display = 'flex';
+
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.EAN_8
+  ]);
+  liveScanReader = new ZXing.BrowserMultiFormatReader(hints);
+  try {
+    await liveScanReader.decodeFromConstraints(
+      { video: { facingMode: 'environment' } },
+      video,
+      (result, err) => {
+        if (liveScanResolving) return;
+        if (result) {
+          handleLiveBarcodeResult(result.getText());
+        } else {
+          liveScanSawGapSinceLastAdd = true; // barcode left frame (or was never there) - a fresh item can re-trigger
+        }
+      }
+    );
+    statusEl.textContent = 'Point your camera at a barcode';
+  } catch (err) {
+    console.warn('Live scan camera error', err);
+    statusEl.className = 'variety-note warn';
+    statusEl.textContent = "Couldn't access the camera - check this site's camera permission, or use Take Photo / From Library instead.";
+  }
+}
+function stopLiveScan(){
+  if (liveScanReader) { liveScanReader.reset(); liveScanReader = null; }
+  document.getElementById('live-scan-backdrop').style.display = 'none';
+  document.getElementById('live-scan-sheet').style.display = 'none';
+}
+function addLiveScanSessionItem(label){
+  liveScanSessionCount++;
+  document.getElementById('live-scan-count').textContent = `(${liveScanSessionCount})`;
+  const row = document.createElement('div');
+  row.className = 'row-sub';
+  row.textContent = '✓ ' + label;
+  document.getElementById('live-scan-session-list').prepend(row);
+}
+function resumeLiveScanAfterResolve(){
+  liveScanResolving = false;
+  document.getElementById('live-scan-resolve-area').innerHTML = '';
+  const statusEl = document.getElementById('live-scan-status');
+  statusEl.className = 'variety-note neutral';
+  statusEl.textContent = 'Point your camera at a barcode';
+}
+function renderLiveScanResolver(code){
+  const area = document.getElementById('live-scan-resolve-area');
+  area.innerHTML = `
+    <input type="text" id="live-scan-resolve-input" placeholder="Search title...">
+    <div class="scan-resolve-picks" id="live-scan-resolve-picks"></div>
+    <button class="clear-btn" id="live-scan-skip-btn">Skip - keep scanning</button>
+  `;
+  document.getElementById('live-scan-skip-btn').addEventListener('click', resumeLiveScanAfterResolve);
+  document.getElementById('live-scan-resolve-input').addEventListener('input', (e) => {
+    const q = e.target.value.trim();
+    const picksEl = document.getElementById('live-scan-resolve-picks');
+    if (q.length < 2) { picksEl.innerHTML = ''; return; }
+    const consoleHeader = document.getElementById('scan-console-select').value;
+    let matches = GAMES.filter(g => matchesSearch(g.title, q) && (!consoleHeader || g.console === consoleHeader)).slice(0, 6);
+    if (!matches.length && consoleHeader) matches = GAMES.filter(g => matchesSearch(g.title, q)).slice(0, 6);
+    picksEl.innerHTML = matches.map(g =>
+      `<button class="note-chip" data-live-resolve-idx="${g.idx}">${escapeHtml(g.console + ' - ' + g.title)}</button>`
+    ).join('');
+    picksEl.querySelectorAll('[data-live-resolve-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const game = GAMES[parseInt(btn.getAttribute('data-live-resolve-idx'))];
+        setUpcMapping(code, game);
+        addToCart(game);
+        addLiveScanSessionItem(game.title + ' (' + game.console + ') - learned');
+        resumeLiveScanAfterResolve();
+      });
+    });
+  });
+}
+function handleLiveBarcodeResult(code){
+  if (code === liveScanLastCode && !liveScanSawGapSinceLastAdd) return; // same item still in view - don't spam-add
+  liveScanLastCode = code;
+  liveScanSawGapSinceLastAdd = false;
+  const statusEl = document.getElementById('live-scan-status');
+  const known = lookupUpc(code);
+  if (known) {
+    addToCart(known);
+    addLiveScanSessionItem(known.title + ' (' + known.console + ')');
+    statusEl.className = 'variety-note good';
+    statusEl.textContent = `✓ ${known.title} (${known.console}) added`;
+  } else {
+    liveScanResolving = true;
+    statusEl.className = 'variety-note warn';
+    statusEl.textContent = 'New barcode - what game is it?';
+    renderLiveScanResolver(code);
+  }
+}
+document.getElementById('scan-live-btn').addEventListener('click', startLiveScan);
+document.getElementById('live-scan-close').addEventListener('click', stopLiveScan);
 
 const overrideInput = document.getElementById('override-pct');
 const overrideLabel = document.getElementById('override-pct-label');
