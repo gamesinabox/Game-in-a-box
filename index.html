@@ -1110,16 +1110,28 @@ function savePackedSummary(){
   try { lsSet(LS_PACKED, JSON.stringify(packedSummary)); }
   catch(e) { console.error('packed summary save failed', e); }
 }
-function loadPriceOverrides(){
+// Lives in IndexedDB, not localStorage - a bulk PriceCharting import can be several MB in one
+// key, and iOS Safari's localStorage ceiling (much smaller than IndexedDB's) can silently fail
+// on a write that size without throwing a catchable error. First load migrates anything already
+// sitting in the old localStorage key, then that key is cleared to free up the space it was using.
+async function loadPriceOverrides(){
   try {
-    const raw = lsGet(LS_OVERRIDES);
+    let raw = await idbGetKV('priceOverrides');
+    if (!raw) {
+      const legacyRaw = lsGet(LS_OVERRIDES);
+      if (legacyRaw) {
+        raw = legacyRaw;
+        await idbSetKV('priceOverrides', raw);
+        try { localStorage.removeItem(LS_OVERRIDES); } catch(e) {}
+      }
+    }
     priceOverrides = raw ? JSON.parse(raw) : {};
     Object.values(priceOverrides).forEach(migrateFillerField);
-  } catch(e) { priceOverrides = {}; }
+  } catch(e) { console.error('price override load failed', e); priceOverrides = {}; }
 }
 function savePriceOverrides(){
-  try { lsSet(LS_OVERRIDES, JSON.stringify(priceOverrides)); }
-  catch(e) { console.error('price override save failed', e); }
+  idbSetKV('priceOverrides', JSON.stringify(priceOverrides))
+    .catch(e => console.error('price override save failed', e));
 }
 let clearedOverrides = {};
 function loadClearedOverrides(){
@@ -2597,16 +2609,43 @@ function drawToCanvas(img, rotationDeg, maxDim){
 // ---------- Condition photos (IndexedDB, not localStorage - photos are too big for that) ----------
 const PHOTO_DB_NAME = 'gameInABoxPhotos';
 const PHOTO_STORE = 'photos';
+const KV_STORE = 'kv';
 let photoDbPromise = null;
 function openPhotoDb(){
   if (photoDbPromise) return photoDbPromise;
   photoDbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(PHOTO_DB_NAME, 1);
-    req.onupgradeneeded = () => { req.result.createObjectStore(PHOTO_STORE, { keyPath: 'id' }); };
+    const req = indexedDB.open(PHOTO_DB_NAME, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PHOTO_STORE)) db.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(KV_STORE)) db.createObjectStore(KV_STORE, { keyPath: 'key' });
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
   return photoDbPromise;
+}
+// A general key-value store in the same IndexedDB database, for app data too big to trust to
+// localStorage - iOS Safari's localStorage has a much smaller, stricter ceiling (historically
+// ~5MB per origin) than the storage quota IndexedDB gets, and large writes there can fail
+// without throwing a catchable error at all, unlike a normal quota exception.
+async function idbGetKV(key){
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(KV_STORE, 'readonly');
+    const req = tx.objectStore(KV_STORE).get(key);
+    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSetKV(key, value){
+  const db = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(KV_STORE, 'readwrite');
+    tx.objectStore(KV_STORE).put({ key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 async function savePhotoBlob(id, blob){
   const db = await openPhotoDb();
@@ -3457,13 +3496,13 @@ document.getElementById('storage-test-run-btn').addEventListener('click', () => 
   }
   renderStorageTestStatus();
 });
-// Reads straight from raw localStorage (not the in-memory priceOverrides variable) so this
-// reflects what's actually persisted right now, not just what's in JS memory this session.
-function renderPriceOverrideCount(){
+// Reads straight from IndexedDB (not the in-memory priceOverrides variable) so this reflects
+// what's actually persisted right now, not just what's in JS memory this session.
+async function renderPriceOverrideCount(){
   const el = document.getElementById('price-override-count-text');
   if (!el) return;
   let raw = null;
-  try { raw = localStorage.getItem(LS_OVERRIDES); } catch(e) {}
+  try { raw = await idbGetKV('priceOverrides'); } catch(e) {}
   const parsed = raw ? JSON.parse(raw) : {};
   const keys = Object.keys(parsed);
   if (!keys.length) { el.textContent = 'Price overrides saved on this device: 0.'; return; }
@@ -4285,7 +4324,7 @@ document.getElementById('import-prices-input').addEventListener('change', (e) =>
   applyDeletedGameKeys();
   loadCatalogAdditions();
   applyCatalogAdditions();
-  loadPriceOverrides();
+  await loadPriceOverrides();
   loadPriceHistory();
   loadSoldArchive();
   loadPackedBoxes();
