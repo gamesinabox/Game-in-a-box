@@ -1892,23 +1892,31 @@ async function startSync(code){
     syncDb = syncFb.getFirestore(app);
     syncActive = true;
 
-    SYNC_COLLECTIONS.forEach(name => {
-      const arr = { inventory, lots, soldArchive, packedBoxes, savedQuotes }[name];
-      const snap = new Map();
-      arr.forEach(item => snap.set(String(item.id), JSON.stringify(item)));
-      syncSnapshots[name] = snap;
-
-      const colRef = syncFb.collection(syncDb, 'workspaces', workspaceCode, name);
-      const unsub = syncFb.onSnapshot(colRef, (snapshot) => {
-        applyRemoteChanges(name, snapshot);
-      }, (err) => {
-        console.error('sync listen error', name, err);
-        setSyncStatus('Connection error - check the workspace code and your connection', 'warn');
+    // Wait for each collection's first snapshot before pushing anything: that first callback
+    // is what actually tells us what's already in the cloud. Seeding the "already synced"
+    // snapshot from local data instead (as this used to do) made a first-time connection with
+    // pre-existing local data look identical to "nothing changed" - so it silently pushed
+    // nothing, and a fresh device with no local data had nothing to pull either.
+    const firstSnapshotPromises = SYNC_COLLECTIONS.map(name => {
+      syncSnapshots[name] = new Map();
+      return new Promise((resolve) => {
+        let resolved = false;
+        const colRef = syncFb.collection(syncDb, 'workspaces', workspaceCode, name);
+        const unsub = syncFb.onSnapshot(colRef, (snapshot) => {
+          applyRemoteChanges(name, snapshot);
+          if (!resolved) { resolved = true; resolve(); }
+        }, (err) => {
+          console.error('sync listen error', name, err);
+          setSyncStatus('Connection error - check the workspace code and your connection', 'warn');
+          if (!resolved) { resolved = true; resolve(); }
+        });
+        syncUnsubscribers.push(unsub);
       });
-      syncUnsubscribers.push(unsub);
     });
+    await Promise.all(firstSnapshotPromises);
 
-    // push anything local-only up (e.g. first time connecting this device)
+    // Now syncSnapshots reflects what's actually in the cloud, so this correctly pushes only
+    // whatever this device has locally that the cloud doesn't (e.g. first time connecting).
     queueSyncPush('inventory', inventory, 'id');
     queueSyncPush('lots', lots, 'id');
     queueSyncPush('soldArchive', soldArchive, 'id');
