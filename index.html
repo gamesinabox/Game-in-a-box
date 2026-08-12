@@ -744,7 +744,7 @@
 
     <div class="section-title" style="margin-top:0;">Cloud Sync</div>
     <div class="settings-card">
-      <p class="settings-hint">Enter the same workspace code on both phones to keep stock, purchases, sales and sold history synced automatically whenever you're online. Price data syncs separately, on demand (see below).</p>
+      <p class="settings-hint">Enter the same workspace code on both phones to keep stock, purchases, sales, sold history and condition photos synced automatically whenever you're online. Price data syncs separately, on demand (see below).</p>
       <div id="sync-disconnected-view">
         <input type="text" id="workspace-code-input" placeholder="Workspace code" autocapitalize="off" autocorrect="off" style="margin-top:8px; width:100%;">
         <button class="primary-btn" id="connect-sync-btn" style="margin-top:8px;">Connect</button>
@@ -757,7 +757,7 @@
 
     <div class="section-title">Backup</div>
     <div class="settings-card">
-      <p class="settings-hint">A full local copy, and the only way to bring photos across devices (those don't sync via Cloud Sync). Nothing is overwritten wholesale &mdash; imports always merge.</p>
+      <p class="settings-hint">A full local copy, handy on its own or as a fallback if you're not using Cloud Sync. Nothing is overwritten wholesale &mdash; imports always merge.</p>
       <button class="primary-btn" id="export-data-btn" style="margin-top:8px;">&#8681; Export backup</button>
       <label for="import-file-input" class="primary-btn" style="background:var(--accent); display:block; text-align:center; cursor:pointer;">
         &#8679; Import backup
@@ -1923,10 +1923,70 @@ async function startSync(code){
     queueSyncPush('packedBoxes', packedBoxes, 'id');
     queueSyncPush('savedQuotes', savedQuotes, 'id');
 
+    await startPhotoSync();
+
     setSyncStatus('Connected - syncing live', 'good');
   } catch (err) {
     console.error('sync start failed', err);
     setSyncStatus('Could not connect - check the workspace code and your connection', 'warn');
+  }
+}
+
+// Photos live in IndexedDB (not a simple in-memory array like inventory/lots), so they get their
+// own sync path rather than reusing applyRemoteChanges/queueSyncPush. Each compressed photo
+// (~150-350KB) fits comfortably as its own small Firestore document under the 1MB limit, so this
+// needs no Firebase Storage - which would require the paid Blaze plan for a new bucket, not worth
+// it for a 2-person shop's condition photos.
+async function pushPhotoToCloud(id, blob){
+  if (!syncActive || !syncDb) return;
+  try {
+    const dataUrl = await blobToDataUrl(blob);
+    if (dataUrl.length > 900000) { console.warn('photo too large to sync, skipping', id); return; }
+    const fb = syncFb;
+    await fb.setDoc(fb.doc(syncDb, 'workspaces', workspaceCode, 'photos', id), { data: dataUrl, updatedAt: new Date().toISOString() });
+  } catch (err) { console.error('photo sync push failed', id, err); }
+}
+async function deletePhotoFromCloud(id){
+  if (!syncActive || !syncDb) return;
+  try {
+    const fb = syncFb;
+    await fb.deleteDoc(fb.doc(syncDb, 'workspaces', workspaceCode, 'photos', id));
+  } catch (err) { console.error('photo sync delete failed', id, err); }
+}
+async function applyRemotePhoto(id, data){
+  const existing = await getPhotoBlob(id);
+  if (existing) return; // already have it - photos are immutable once captured, no need to compare
+  try {
+    const blob = await dataUrlToBlob(data.data);
+    await savePhotoBlob(id, blob, true); // true = fromRemote, don't re-push what we just received
+  } catch (err) { console.error('photo sync apply failed', id, err); }
+}
+async function startPhotoSync(){
+  const cloudPhotoIds = new Set();
+  await new Promise((resolve) => {
+    let resolved = false;
+    const colRef = syncFb.collection(syncDb, 'workspaces', workspaceCode, 'photos');
+    const unsub = syncFb.onSnapshot(colRef, (snapshot) => {
+      snapshot.docChanges().forEach(change => {
+        const id = change.doc.id;
+        if (change.type === 'removed') { cloudPhotoIds.delete(id); return; }
+        cloudPhotoIds.add(id);
+        applyRemotePhoto(id, change.doc.data());
+      });
+      if (!resolved) { resolved = true; resolve(); }
+    }, (err) => {
+      console.error('photo sync listen error', err);
+      if (!resolved) { resolved = true; resolve(); }
+    });
+    syncUnsubscribers.push(unsub);
+  });
+  // push anything local-only up (e.g. photos captured before this device ever connected)
+  const localPhotoIds = await getAllPhotoIds();
+  for (const id of localPhotoIds) {
+    if (!cloudPhotoIds.has(id)) {
+      const blob = await getPhotoBlob(id);
+      if (blob) await pushPhotoToCloud(id, blob);
+    }
   }
 }
 
@@ -2938,14 +2998,15 @@ async function idbSetKV(key, value){
     tx.onerror = () => reject(tx.error);
   });
 }
-async function savePhotoBlob(id, blob){
+async function savePhotoBlob(id, blob, fromRemote){
   const db = await openPhotoDb();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const tx = db.transaction(PHOTO_STORE, 'readwrite');
     tx.objectStore(PHOTO_STORE).put({ id, blob, createdAt: new Date().toISOString() });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  if (!fromRemote) pushPhotoToCloud(id, blob);
 }
 async function getPhotoBlob(id){
   if (!id) return null;
@@ -2957,15 +3018,25 @@ async function getPhotoBlob(id){
     req.onerror = () => reject(req.error);
   });
 }
-async function deletePhotoBlob(id){
-  if (!id) return;
+async function getAllPhotoIds(){
   const db = await openPhotoDb();
   return new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, 'readonly');
+    const req = tx.objectStore(PHOTO_STORE).getAllKeys();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function deletePhotoBlob(id, fromRemote){
+  if (!id) return;
+  const db = await openPhotoDb();
+  await new Promise((resolve, reject) => {
     const tx = db.transaction(PHOTO_STORE, 'readwrite');
     tx.objectStore(PHOTO_STORE).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+  if (!fromRemote) deletePhotoFromCloud(id);
 }
 // Resize to a max ~1280px edge and compress to JPEG ~80% - keeps individual condition photos
 // around 150-350KB. Enough to see scratches, cracks, missing labels; not enough to zoom in on a
