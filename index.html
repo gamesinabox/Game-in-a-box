@@ -263,6 +263,15 @@
     background:var(--chip-bg); color:var(--chip-ink); border:none; font-family:inherit; font-weight:600; font-size:0.78rem;
     padding:8px 12px; border-radius:var(--r-pill); cursor:pointer; flex-shrink:0;
   }
+  .reminder-banner{
+    display:flex; align-items:center; gap:10px; background:var(--warn-bg); border:1px solid var(--warn);
+    border-radius:var(--r-md); padding:11px 13px; margin-bottom:14px;
+  }
+  .reminder-banner p{ color:var(--ink); font-size:0.8rem; line-height:1.4; }
+  .reminder-banner button{
+    background:var(--chip-bg); color:var(--chip-ink); border:none; font-family:inherit; font-weight:600; font-size:0.78rem;
+    padding:8px 12px; border-radius:var(--r-pill); cursor:pointer; flex-shrink:0;
+  }
   .badge{
     font-size:0.64rem; font-weight:600; padding:2px 7px; border-radius:999px;
     white-space:nowrap; text-transform:uppercase; letter-spacing:0.02em;
@@ -547,6 +556,7 @@
 <!-- DASHBOARD TAB -->
 <div class="tab-panel active" id="tab-dashboard">
   <main>
+    <div id="dash-photo-reminder"></div>
     <div class="section-title">Overview</div>
     <div class="stats-strip" id="dash-overview"></div>
 
@@ -722,6 +732,15 @@
       </label>
     </div>
 
+    <div class="section-title">Storage</div>
+    <div class="settings-card">
+      <p class="settings-hint" id="storage-usage-text">Checking storage usage...</p>
+      <div id="storage-usage-bar-track" style="margin-top:8px; height:8px; border-radius:999px; background:var(--field-bg); overflow:hidden;">
+        <div id="storage-usage-bar-fill" style="height:100%; width:0%; background:var(--accent); border-radius:999px;"></div>
+      </div>
+      <p class="settings-hint" style="margin-top:8px;">If this gets close to full, saves can silently fail. Export a backup, then delete some condition photos from older inventory items to free up room.</p>
+    </div>
+
     <div class="section-title">Buying</div>
     <div class="settings-card">
       <div class="override-row" style="background:none; border:none; padding:0;">
@@ -778,6 +797,7 @@
 
 <!-- INVENTORY TAB -->
 <div class="tab-panel" id="tab-inventory">
+  <div id="inv-photo-reminder" style="padding:12px 18px 0;"></div>
   <div class="controls">
     <div class="search-row">
       <input type="search" id="inv-search" placeholder="Search your inventory..." autocomplete="off">
@@ -793,8 +813,8 @@
   </div>
   <main>
     <div class="stats-strip" id="inv-stats"></div>
-    <div id="inv-lots"></div>
     <div id="inv-list"></div>
+    <div id="inv-lots"></div>
 
     <details class="custom-add" id="sold-archive-section" style="margin-top:14px;">
       <summary class="custom-add-label">Sold Archive <span class="hint" id="sold-archive-count"></span></summary>
@@ -970,6 +990,7 @@ const LS_RECEIVING_SESSION = 'loosecart_receiving_session';
 
 let storageAvailable = true;
 let memoryFallback = {};
+let storageQuotaExceeded = false;
 
 function testStorageAvailable(){
   try {
@@ -979,6 +1000,22 @@ function testStorageAvailable(){
     return true;
   } catch(e) { return false; }
 }
+// Runs on every failed write, not just at startup, so a mid-session quota-exceeded error
+// (e.g. once photos fill up the origin's storage) surfaces immediately instead of silently
+// falling back to an in-memory value that's lost the moment the app is closed.
+function updateStorageWarningBanner(){
+  const el = document.getElementById('storage-warning');
+  if (!el) return;
+  if (storageQuotaExceeded) {
+    el.innerHTML = '&#9888; Storage is full &mdash; your latest changes are NOT being saved and will be lost when you close this app. Export a backup now from Settings, then free up space (delete some condition photos from older items) before making more changes.';
+    el.classList.add('show');
+  } else if (!storageAvailable) {
+    el.innerHTML = "&#9888; This browser is blocking saved data for locally-opened files, so changes won't persist after you close this tab. Try opening the file in Firefox, or use Export/Import to manually save your progress each session.";
+    el.classList.add('show');
+  } else {
+    el.classList.remove('show');
+  }
+}
 function lsGet(key){
   if (!storageAvailable) return memoryFallback[key] || null;
   try { return localStorage.getItem(key); }
@@ -986,8 +1023,15 @@ function lsGet(key){
 }
 function lsSet(key, value){
   if (!storageAvailable) { memoryFallback[key] = value; return; }
-  try { localStorage.setItem(key, value); }
-  catch(e) { console.error('storage write failed', e); memoryFallback[key] = value; }
+  try {
+    localStorage.setItem(key, value);
+    if (storageQuotaExceeded) { storageQuotaExceeded = false; updateStorageWarningBanner(); }
+  }
+  catch(e) {
+    console.error('storage write failed', e);
+    memoryFallback[key] = value;
+    if (!storageQuotaExceeded) { storageQuotaExceeded = true; updateStorageWarningBanner(); }
+  }
 }
 
 function uid(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
@@ -1231,6 +1275,37 @@ function mergeUpcMap(theirMap){
   });
   if (added) saveUpcMap();
   return added;
+}
+function findKnownBarcode(consoleName, title){
+  const key = gameKey(consoleName, title);
+  for (const upc in upcMap) if (upcMap[upc] === key) return upc;
+  return null;
+}
+function itemHasAllPhotos(it){
+  return !!(it.photos && it.photos.front && it.photos.back && it.photos.disc);
+}
+function renderMissingChecklistReminder(){
+  const knownKeys = new Set(Object.values(upcMap));
+  const missingPhotos = inventory.filter(it => !itemHasAllPhotos(it));
+  const missingBarcode = inventory.filter(it => !it.upc && !knownKeys.has(gameKey(it.console, it.title)));
+  const html = (missingPhotos.length || missingBarcode.length) ? `
+    <div class="reminder-banner">
+      <div style="flex:1;">
+        <p style="margin:0 0 4px; font-weight:600;">&#9888; Checklist follow-up needed</p>
+        ${missingPhotos.length ? `<p style="margin:0;">${missingPhotos.length} item${missingPhotos.length === 1 ? '' : 's'} still need${missingPhotos.length === 1 ? 's' : ''} photos</p>` : ''}
+        ${missingBarcode.length ? `<p style="margin:0;">${missingBarcode.length} item${missingBarcode.length === 1 ? '' : 's'} still need${missingBarcode.length === 1 ? 's' : ''} a barcode scanned</p>` : ''}
+      </div>
+      <button class="reminder-goto-inventory-btn" type="button">Review</button>
+    </div>` : '';
+  ['dash-photo-reminder', 'inv-photo-reminder'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+  document.querySelectorAll('.reminder-goto-inventory-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelector('#bottom-tabs button[data-tab="inventory"]').click();
+    });
+  });
 }
 function mergeSavedQuotes(theirQuotes){
   const existingIds = new Set(savedQuotes.map(q => q.id));
@@ -1677,6 +1752,8 @@ function renderDashboardTab(){
       </div>`;
     }).join('');
   }
+
+  renderMissingChecklistReminder();
 }
 document.getElementById('dash-goto-buy').addEventListener('click', () => document.querySelector('#bottom-tabs button[data-tab="buy"]').click());
 document.getElementById('dash-goto-cart').addEventListener('click', () => document.querySelector('#bottom-tabs button[data-tab="cart"]').click());
@@ -2732,8 +2809,12 @@ let liveScanLastCode = null;
 let liveScanSawGapSinceLastAdd = true;
 let liveScanResolving = false;
 let liveScanSessionCount = 0;
+let liveScanMode = 'cart';
+let liveScanAttachTarget = null;
 
-async function startLiveScan(){
+async function startLiveScan(mode, attachTarget){
+  liveScanMode = mode || 'cart';
+  liveScanAttachTarget = attachTarget || null;
   const backdrop = document.getElementById('live-scan-backdrop');
   const sheet = document.getElementById('live-scan-sheet');
   const statusEl = document.getElementById('live-scan-status');
@@ -2746,7 +2827,7 @@ async function startLiveScan(){
   document.getElementById('live-scan-count').textContent = '';
   document.getElementById('live-scan-resolve-area').innerHTML = '';
   statusEl.className = 'variety-note neutral';
-  statusEl.textContent = 'Starting camera...';
+  statusEl.textContent = liveScanMode === 'attach' ? `Scanning barcode for ${attachTarget.title}...` : 'Starting camera...';
   backdrop.style.display = 'block';
   sheet.style.display = 'flex';
 
@@ -2770,7 +2851,7 @@ async function startLiveScan(){
         }
       }
     );
-    statusEl.textContent = 'Point your camera at a barcode';
+    statusEl.textContent = liveScanMode === 'attach' ? `Point your camera at the barcode for ${attachTarget.title}` : 'Point your camera at a barcode';
   } catch (err) {
     console.warn('Live scan camera error', err);
     statusEl.className = 'variety-note warn';
@@ -2831,6 +2912,16 @@ function handleLiveBarcodeResult(code){
   liveScanLastCode = code;
   liveScanSawGapSinceLastAdd = false;
   const statusEl = document.getElementById('live-scan-status');
+  if (liveScanMode === 'attach') {
+    const target = liveScanAttachTarget;
+    setUpcMapping(code, { console: target.console, title: target.title });
+    target.upc = code;
+    saveReceivingSessionState();
+    statusEl.className = 'variety-note good';
+    statusEl.textContent = `✓ Barcode captured for ${target.title}`;
+    setTimeout(() => { stopLiveScan(); renderReceivingStep(); }, 700);
+    return;
+  }
   const known = lookupUpc(code);
   if (known) {
     addToCart(known);
@@ -2844,7 +2935,7 @@ function handleLiveBarcodeResult(code){
     renderLiveScanResolver(code);
   }
 }
-document.getElementById('scan-live-btn').addEventListener('click', startLiveScan);
+document.getElementById('scan-live-btn').addEventListener('click', () => startLiveScan('cart'));
 document.getElementById('live-scan-close').addEventListener('click', stopLiveScan);
 
 const overrideInput = document.getElementById('override-pct');
@@ -2902,7 +2993,7 @@ function startReceivingSession(){
       tempId: c.tempId, console: c.console, genre: c.genre, title: c.title, tier: c.tier,
       filler: c.filler, aud: c.aud, price: c.price,
       photos: { front: null, back: null, disc: null },
-      manualIncluded: null, conditionNote: '', notes: []
+      manualIncluded: null, conditionNote: '', notes: [], upc: null
     })),
     index: 0,
     loadedQuoteId: loadedQuoteId
@@ -2911,7 +3002,7 @@ function startReceivingSession(){
   openReceivingSheet();
 }
 function isReceivingItemComplete(item){
-  return !!(item.photos.front && item.photos.back && item.photos.disc && item.manualIncluded !== null);
+  return item.manualIncluded !== null;
 }
 function openReceivingSheet(){
   if (!receivingSession) return;
@@ -2962,7 +3053,7 @@ function renderReceivingStep(){
         <div class="row-sub">${escapeHtml(item.console || 'Custom')} ${item.tier !== 'Custom' ? `<span class="${tierBadgeClass(item.tier)}">${escapeHtml(item.tier)}</span>` : ''}</div>
       </div>
     </div>
-    <div class="section-title" style="margin-top:0;">Photos <span class="hint">all three required</span></div>
+    <div class="section-title" style="margin-top:0;">Photos <span class="hint">optional &mdash; recommended for higher-value items</span></div>
     <div class="receiving-photo-grid">
       ${['front','back','disc'].map(slot => `
         <button class="receiving-photo-slot${item.photos[slot] ? ' filled' : ''}" data-slot="${slot}" type="button">
@@ -2971,6 +3062,10 @@ function renderReceivingStep(){
         </button>
       `).join('')}
     </div>
+    <div class="section-title">Barcode <span class="hint">optional &mdash; teaches the scanner for next time</span></div>
+    ${(item.upc || findKnownBarcode(item.console, item.title))
+      ? `<div class="variety-note good">&#10003; Barcode on file${item.upc ? ` (${escapeHtml(item.upc)})` : ''}</div>`
+      : `<button class="clear-btn" id="receiving-scan-barcode-btn" type="button" style="margin-top:8px;">&#128247; Scan barcode</button>`}
     <div class="section-title">Manual included?</div>
     <div class="segmented" id="receiving-manual-picker">
       <button data-manual-choice="yes" class="${item.manualIncluded === true ? 'active' : ''}" type="button">Yes</button>
@@ -3000,6 +3095,8 @@ function renderReceivingStep(){
       document.getElementById('receiving-photo-input').click();
     });
   });
+  const scanBarcodeBtn = document.getElementById('receiving-scan-barcode-btn');
+  if (scanBarcodeBtn) scanBarcodeBtn.addEventListener('click', () => startLiveScan('attach', item));
   document.querySelectorAll('#receiving-manual-picker button').forEach(btn => {
     btn.addEventListener('click', () => {
       item.manualIncluded = btn.getAttribute('data-manual-choice') === 'yes';
@@ -3037,7 +3134,7 @@ async function confirmReceipt(){
       id: uid(), console: it.console, genre: it.genre, title: it.title, tier: it.tier,
       filler: it.filler, paidPrice: parseFloat(it.price) || 0, sellPrice: it.aud, dateAdded: now,
       lotId: lot.id, lotLabel: lot.label, reservedForSolo: false, updatedAt: now,
-      notes: it.notes || [], photos: it.photos, manualIncluded: it.manualIncluded,
+      notes: it.notes || [], photos: it.photos, manualIncluded: it.manualIncluded, upc: it.upc || null,
       conditionNote: it.conditionNote || '', receivedBy: deviceIdentity, receivedAt: now, checkedIn: true
     });
   });
@@ -3093,11 +3190,16 @@ document.getElementById('receiving-photo-input').addEventListener('change', asyn
   if (!file || !receivingSession || slot === null) return;
   const item = receivingSession.items[receivingSession.index];
   const oldPhotoId = item.photos[slot];
-  const newPhotoId = await capturePhotoForSlot(file);
-  item.photos[slot] = newPhotoId;
-  if (oldPhotoId) await deletePhotoBlob(oldPhotoId);
-  saveReceivingSessionState();
-  renderReceivingStep();
+  try {
+    const newPhotoId = await capturePhotoForSlot(file);
+    item.photos[slot] = newPhotoId;
+    if (oldPhotoId) await deletePhotoBlob(oldPhotoId);
+    saveReceivingSessionState();
+    renderReceivingStep();
+  } catch(err) {
+    console.error('photo save failed', err);
+    showToast("Couldn't save that photo - storage may be full. Export a backup and free up space in Settings.", 5000);
+  }
 });
 
 function generateFriendQuoteText(){
@@ -3233,9 +3335,29 @@ function closeSettingsSheet(){
   document.getElementById('settings-sheet').style.display = 'none';
   document.getElementById('settings-backdrop').style.display = 'none';
 }
+async function renderStorageUsage(){
+  const textEl = document.getElementById('storage-usage-text');
+  const fillEl = document.getElementById('storage-usage-bar-fill');
+  if (!textEl || !navigator.storage || !navigator.storage.estimate) {
+    if (textEl) textEl.textContent = "This browser won't report storage usage - keep exporting backups regularly just in case.";
+    return;
+  }
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    const usedMb = (usage / (1024*1024)).toFixed(1);
+    const quotaMb = (quota / (1024*1024)).toFixed(0);
+    const pct = quota ? Math.min(100, Math.round((usage / quota) * 100)) : 0;
+    textEl.textContent = `${usedMb} MB used of ~${quotaMb} MB available (${pct}%)`;
+    fillEl.style.width = pct + '%';
+    fillEl.style.background = pct >= 85 ? 'var(--warn)' : (pct >= 65 ? 'var(--mid)' : 'var(--accent)');
+  } catch(e) {
+    textEl.textContent = "Couldn't check storage usage right now.";
+  }
+}
 document.getElementById('open-settings-btn').addEventListener('click', () => {
   document.getElementById('settings-sheet').style.display = 'flex';
   document.getElementById('settings-backdrop').style.display = 'block';
+  renderStorageUsage();
 });
 document.getElementById('close-settings').addEventListener('click', closeSettingsSheet);
 document.getElementById('settings-backdrop').addEventListener('click', closeSettingsSheet);
@@ -3414,6 +3536,7 @@ function renderInventoryTab(){
   `;
 
   renderLotsSection();
+  renderMissingChecklistReminder();
 
   const listEl = document.getElementById('inv-list');
   if (filtered.length === 0){
@@ -4011,9 +4134,7 @@ document.getElementById('import-file-input').addEventListener('change', (e) => {
 // ---------- Init ----------
 (async function init(){
   storageAvailable = testStorageAvailable();
-  if (!storageAvailable) {
-    document.getElementById('storage-warning').classList.add('show');
-  }
+  updateStorageWarningBanner();
   document.getElementById('results').innerHTML = '<div class="loading-note">Loading catalog...</div>';
   await loadInventory();
   loadRemovedItemIds();
