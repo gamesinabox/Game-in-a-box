@@ -748,6 +748,7 @@
       <p class="settings-hint" style="margin-top:8px;">If this gets close to full, saves can silently fail. Export a backup, then delete some condition photos from older inventory items to free up room.</p>
       <p class="settings-hint" id="storage-test-status" style="margin-top:12px;">Not tested yet.</p>
       <button class="clear-btn" id="storage-test-run-btn" type="button">Run a save/close/reopen test</button>
+      <p class="settings-hint" id="price-override-count-text" style="margin-top:12px;"></p>
     </div>
 
     <div class="section-title">Buying</div>
@@ -1049,6 +1050,14 @@ function lsSet(key, value){
 function uid(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
 function gameKey(console_, title){ return console_ + '::' + title; }
 function reindexGames(){ for (let i = 0; i < GAMES.length; i++) GAMES[i].idx = i; }
+// A bulk price/genre import can carry tens of thousands of entries. Looking each one up with
+// GAMES.find() (a linear scan of the ~26k-game catalog) turns that into hundreds of millions of
+// comparisons and hangs the page - build an O(1) lookup once instead.
+function buildGameIndex(){
+  const m = new Map();
+  GAMES.forEach(g => m.set(gameKey(g.console, g.title), g));
+  return m;
+}
 
 function migrateFillerField(obj){
   // Data saved before the tier+filler simplification used a 4-value 'desirability' field.
@@ -1229,8 +1238,9 @@ function saveGenreOverrides(){
   catch(e) { console.error('genre override save failed', e); }
 }
 function applyGenreOverrides(){
+  const index = buildGameIndex();
   Object.keys(genreOverrides).forEach(key => {
-    const g = GAMES.find(x => gameKey(x.console, x.title) === key);
+    const g = index.get(key);
     if (g) g.genre = genreOverrides[key];
   });
 }
@@ -1392,9 +1402,10 @@ function hindsightBadge(item){
   return null;
 }
 function applyPriceOverrides(){
+  const index = buildGameIndex();
   Object.keys(priceOverrides).forEach(key => {
     const ov = priceOverrides[key];
-    const g = GAMES.find(x => gameKey(x.console, x.title) === key);
+    const g = index.get(key);
     if (g) { g.aud = ov.aud; g.bulk = ov.bulk; if (ov.tier) g.tier = ov.tier; if (ov.filler !== undefined) g.filler = ov.filler; }
   });
 }
@@ -1421,6 +1432,7 @@ function setPriceOverride(game, newAud, newBulk, newTier, newFiller){
   saveClearedOverrides();
   logPriceChange(game.title, game.console, oldAud, newAud);
   renderCheckedStat();
+  showToast(`Saved: ${game.title} - buy ${fmt(newBulk)} / sell ${fmt(newAud)}`, 2500);
 }
 function clearPriceOverride(game, defaults){
   const key = gameKey(game.console, game.title);
@@ -1438,13 +1450,14 @@ function clearPriceOverride(game, defaults){
 function mergePriceOverrides(theirOverrides, theirCleared){
   theirCleared = theirCleared || {};
   let applied = 0, kept = 0;
+  const index = buildGameIndex();
   Object.keys(theirCleared).forEach(key => {
     const theirTime = theirCleared[key];
     const mineTime = (priceOverrides[key] && priceOverrides[key].updatedAt) || clearedOverrides[key] || null;
     if (!mineTime || theirTime > mineTime) {
       delete priceOverrides[key];
       clearedOverrides[key] = theirTime;
-      const g = GAMES.find(x => gameKey(x.console, x.title) === key);
+      const g = index.get(key);
       const d = ORIGINAL_PRICES[key];
       if (g && d) { g.aud = d.aud; g.bulk = d.bulk; g.tier = d.tier; g.filler = d.filler; }
     }
@@ -1458,7 +1471,7 @@ function mergePriceOverrides(theirOverrides, theirCleared){
     if (!mine || (theirs.updatedAt || '') > (mine.updatedAt || '')) {
       priceOverrides[key] = theirs;
       delete clearedOverrides[key];
-      const g = GAMES.find(x => gameKey(x.console, x.title) === key);
+      const g = index.get(key);
       if (g) { g.aud = theirs.aud; g.bulk = theirs.bulk; if (theirs.tier) g.tier = theirs.tier; if (theirs.filler !== undefined) g.filler = theirs.filler; }
       applied++;
     } else {
@@ -3413,11 +3426,25 @@ document.getElementById('storage-test-run-btn').addEventListener('click', () => 
   }
   renderStorageTestStatus();
 });
+// Reads straight from raw localStorage (not the in-memory priceOverrides variable) so this
+// reflects what's actually persisted right now, not just what's in JS memory this session.
+function renderPriceOverrideCount(){
+  const el = document.getElementById('price-override-count-text');
+  if (!el) return;
+  let raw = null;
+  try { raw = localStorage.getItem(LS_OVERRIDES); } catch(e) {}
+  const parsed = raw ? JSON.parse(raw) : {};
+  const keys = Object.keys(parsed);
+  if (!keys.length) { el.textContent = 'Price overrides saved on this device: 0.'; return; }
+  const latest = keys.reduce((max, k) => (parsed[k].updatedAt || '') > max ? parsed[k].updatedAt : max, '');
+  el.textContent = `Price overrides saved on this device: ${keys.length}. Most recent: ${latest ? new Date(latest).toLocaleString('en-AU') : 'unknown'}.`;
+}
 document.getElementById('open-settings-btn').addEventListener('click', () => {
   document.getElementById('settings-sheet').style.display = 'flex';
   document.getElementById('settings-backdrop').style.display = 'block';
   renderStorageUsage();
   renderStorageTestStatus();
+  renderPriceOverrideCount();
 });
 document.getElementById('close-settings').addEventListener('click', closeSettingsSheet);
 document.getElementById('settings-backdrop').addEventListener('click', closeSettingsSheet);
