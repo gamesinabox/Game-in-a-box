@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Game In A Box - Inventory & Packing Tool</title>
 
+<!-- Cloud sync: loaded from Google's CDN since it's only needed when actually syncing (an
+     inherently online operation) - everything else in this app is self-hosted and works fully
+     offline. Bridges the ES-module SDK into window.__firebaseReady for the classic script below. -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+  import {
+    getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, collection, writeBatch
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  window.__firebaseReady = Promise.resolve({
+    initializeApp, getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, collection, writeBatch
+  });
+</script>
+
 <!-- PWA: installable on iPhone home screen, works offline -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#A32323" media="(prefers-color-scheme: light)">
@@ -729,9 +742,22 @@
   </div>
   <div style="overflow-y:auto; flex:1; padding:14px 18px; padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));">
 
-    <div class="section-title" style="margin-top:0;">Backup</div>
+    <div class="section-title" style="margin-top:0;">Cloud Sync</div>
     <div class="settings-card">
-      <p class="settings-hint">Share this with your co-owner to keep both phones in sync. Nothing is overwritten wholesale &mdash; imports always merge.</p>
+      <p class="settings-hint">Enter the same workspace code on both phones to keep stock, purchases, sales and sold history synced automatically whenever you're online. Price data syncs separately, on demand (see below).</p>
+      <div id="sync-disconnected-view">
+        <input type="text" id="workspace-code-input" placeholder="Workspace code" autocapitalize="off" autocorrect="off" style="margin-top:8px; width:100%;">
+        <button class="primary-btn" id="connect-sync-btn" style="margin-top:8px;">Connect</button>
+      </div>
+      <div id="sync-connected-view" style="display:none;">
+        <div class="variety-note good" id="sync-status-text">Connected</div>
+        <button class="clear-btn" id="disconnect-sync-btn" style="margin-top:8px;">Disconnect this device</button>
+      </div>
+    </div>
+
+    <div class="section-title">Backup</div>
+    <div class="settings-card">
+      <p class="settings-hint">A full local copy, and the only way to bring photos across devices (those don't sync via Cloud Sync). Nothing is overwritten wholesale &mdash; imports always merge.</p>
       <button class="primary-btn" id="export-data-btn" style="margin-top:8px;">&#8681; Export backup</button>
       <label for="import-file-input" class="primary-btn" style="background:var(--accent); display:block; text-align:center; cursor:pointer;">
         &#8679; Import backup
@@ -746,6 +772,8 @@
         &#8679; Import prices
         <input type="file" id="import-prices-input" accept="application/json" style="display:none;">
       </label>
+      <p class="settings-hint" id="price-sync-status" style="margin-top:12px;">Connect Cloud Sync above to sync prices between devices too.</p>
+      <button class="clear-btn" id="sync-prices-btn" style="margin-top:8px; display:none;">&#8635; Sync prices with cloud now</button>
     </div>
 
     <div class="section-title">Storage</div>
@@ -1089,6 +1117,7 @@ function loadInventory(){
 function saveInventory(){
   try { lsSet(LS_INV, JSON.stringify(inventory)); }
   catch(e) { console.error('inventory save failed', e); }
+  queueSyncPush('inventory', inventory, 'id');
 }
 function loadRemovedItemIds(){
   try {
@@ -1169,6 +1198,7 @@ function loadSoldArchive(){
 function saveSoldArchive(){
   try { lsSet(LS_SOLD, JSON.stringify(soldArchive)); }
   catch(e) { console.error('sold archive save failed', e); }
+  queueSyncPush('soldArchive', soldArchive, 'id');
 }
 function loadPackedBoxes(){
   try {
@@ -1179,6 +1209,7 @@ function loadPackedBoxes(){
 function savePackedBoxes(){
   try { lsSet(LS_PACKED_BOXES, JSON.stringify(packedBoxes)); }
   catch(e) { console.error('packed boxes save failed', e); }
+  queueSyncPush('packedBoxes', packedBoxes, 'id');
 }
 function loadLots(){
   try {
@@ -1189,6 +1220,7 @@ function loadLots(){
 function saveLots(){
   try { lsSet(LS_LOTS, JSON.stringify(lots)); }
   catch(e) { console.error('lots save failed', e); }
+  queueSyncPush('lots', lots, 'id');
 }
 let catalogAdditions = [];
 function loadCatalogAdditions(){
@@ -1223,6 +1255,7 @@ function loadSavedQuotes(){
 function saveSavedQuotes(){
   try { lsSet(LS_QUOTES, JSON.stringify(savedQuotes)); }
   catch(e) { console.error('saved quotes save failed', e); }
+  queueSyncPush('savedQuotes', savedQuotes, 'id');
 }
 function loadQuoteIntro(){
   quoteIntro = lsGet(LS_QUOTE_INTRO) || '';
@@ -1700,6 +1733,256 @@ function importPricesOnly(file){
   };
   reader.readAsText(file);
 }
+
+// ---------- Cloud Sync (Firestore) ----------
+// Optional real-time sync between devices via a shared "workspace code" (Settings > Cloud Sync).
+// Reuses the exact same merge functions as manual backup import (mergeInventory, mergeLots, etc.)
+// so conflict resolution stays identical whether a change arrives via file import or live sync -
+// Firestore's real-time listener is just a new trigger for the same trusted merge logic.
+// Price data is deliberately NOT part of this real-time layer: a bulk PriceCharting import can be
+// tens of thousands of entries, and listening to that many documents continuously would burn
+// through Firestore's free-tier read quota in one sync. It syncs separately, on demand, chunked
+// to stay under Firestore's 1MB-per-document limit (see syncPricesNow). Photos aren't synced at
+// all here - that would need Firebase Storage, a separate product; use Export/Import for those.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCjyIAoRu2Emq3FOcTXffFae1cFtco7MK8",
+  authDomain: "games-in-a-box.firebaseapp.com",
+  projectId: "games-in-a-box",
+  storageBucket: "games-in-a-box.firebasestorage.app",
+  messagingSenderId: "360940600227",
+  appId: "1:360940600227:web:68e12706c66ff9ad3fb816"
+};
+const LS_WORKSPACE_CODE = 'loosecart_workspace_code';
+const SYNC_COLLECTIONS = ['inventory', 'lots', 'soldArchive', 'packedBoxes', 'savedQuotes'];
+
+let workspaceCode = null;
+let syncDb = null;
+let syncFb = null;
+let syncUnsubscribers = [];
+let syncSnapshots = {}; // collectionName -> Map(id -> last-known JSON string), used to diff pushes and avoid re-push loops
+let syncActive = false;
+
+function loadWorkspaceCode(){ workspaceCode = lsGet(LS_WORKSPACE_CODE) || null; }
+
+function setSyncStatus(text, cls){
+  const el = document.getElementById('sync-status-text');
+  if (el) { el.textContent = text; el.className = 'variety-note ' + (cls || 'neutral'); }
+  const priceStatusEl = document.getElementById('price-sync-status');
+  const priceBtnEl = document.getElementById('sync-prices-btn');
+  if (priceStatusEl && priceBtnEl) {
+    if (syncActive) {
+      priceStatusEl.textContent = 'Cloud Sync is connected.';
+      priceBtnEl.style.display = 'block';
+    } else {
+      priceStatusEl.textContent = 'Connect Cloud Sync above to sync prices between devices too.';
+      priceBtnEl.style.display = 'none';
+    }
+  }
+}
+
+function stopSync(){
+  syncUnsubscribers.forEach(u => { try { u(); } catch(e) {} });
+  syncUnsubscribers = [];
+  syncActive = false;
+  syncDb = null;
+  syncSnapshots = {};
+  const disc = document.getElementById('sync-disconnected-view');
+  const conn = document.getElementById('sync-connected-view');
+  if (disc) disc.style.display = 'block';
+  if (conn) conn.style.display = 'none';
+  setSyncStatus('Not connected', 'neutral');
+}
+
+function applyRemoteChanges(collectionName, snapshot){
+  const changes = snapshot.docChanges();
+  if (!changes.length) return;
+  const removedIds = {};
+  const upsertItems = [];
+  const now = new Date().toISOString();
+  changes.forEach(change => {
+    const id = change.doc.id;
+    if (change.type === 'removed') {
+      removedIds[id] = now;
+      if (syncSnapshots[collectionName]) syncSnapshots[collectionName].delete(id);
+    } else {
+      const data = change.doc.data();
+      if (!data.id) data.id = id;
+      upsertItems.push(data);
+      if (!syncSnapshots[collectionName]) syncSnapshots[collectionName] = new Map();
+      syncSnapshots[collectionName].set(id, JSON.stringify(data));
+    }
+  });
+
+  if (collectionName === 'inventory') {
+    mergeInventory(upsertItems, removedIds);
+    renderInventoryTab(); renderDashboardTab(); renderPackTab(); updateNavBadge();
+  } else if (collectionName === 'lots') {
+    mergeLots(upsertItems);
+    renderInventoryTab(); renderDashboardTab();
+  } else if (collectionName === 'savedQuotes') {
+    mergeSavedQuotes(upsertItems);
+    renderSavedQuotes();
+  } else if (collectionName === 'soldArchive') {
+    const existingIds = new Set(soldArchive.map(s => s.id));
+    upsertItems.forEach(s => { if (!existingIds.has(s.id)) { soldArchive.push(s); existingIds.add(s.id); } });
+    saveSoldArchive();
+    renderInventoryTab();
+  } else if (collectionName === 'packedBoxes') {
+    const existingIds = new Set(packedBoxes.map(b => b.id));
+    upsertItems.forEach(b => {
+      if (existingIds.has(b.id)) {
+        const idx = packedBoxes.findIndex(x => x.id === b.id);
+        if ((b.updatedAt || '') > (packedBoxes[idx].updatedAt || '')) packedBoxes[idx] = b;
+      } else { packedBoxes.push(b); existingIds.add(b.id); }
+    });
+    savePackedBoxes();
+    renderPackTab();
+  }
+}
+
+async function syncPushDiff(collectionName, currentArray, idField){
+  if (!syncActive || !syncDb) return;
+  try {
+    const fb = syncFb;
+    const prev = syncSnapshots[collectionName] || new Map();
+    const currentIds = new Set();
+    const batch = fb.writeBatch(syncDb);
+    let opCount = 0;
+    currentArray.forEach(item => {
+      const id = String(item[idField]);
+      currentIds.add(id);
+      const json = JSON.stringify(item);
+      if (prev.get(id) !== json) {
+        const ref = fb.doc(syncDb, 'workspaces', workspaceCode, collectionName, id);
+        batch.set(ref, item);
+        prev.set(id, json);
+        opCount++;
+      }
+    });
+    prev.forEach((_, id) => {
+      if (!currentIds.has(id)) {
+        const ref = fb.doc(syncDb, 'workspaces', workspaceCode, collectionName, id);
+        batch.delete(ref);
+        prev.delete(id);
+        opCount++;
+      }
+    });
+    syncSnapshots[collectionName] = prev;
+    if (opCount > 0) await batch.commit();
+  } catch (err) {
+    console.error('sync push failed', collectionName, err);
+  }
+}
+function queueSyncPush(collectionName, currentArray, idField){
+  if (!syncActive) return;
+  syncPushDiff(collectionName, currentArray, idField);
+}
+
+async function startSync(code){
+  const disc = document.getElementById('sync-disconnected-view');
+  const conn = document.getElementById('sync-connected-view');
+  workspaceCode = code;
+  lsSet(LS_WORKSPACE_CODE, code);
+  if (disc) disc.style.display = 'none';
+  if (conn) conn.style.display = 'block';
+  setSyncStatus('Connecting...', 'neutral');
+  try {
+    syncFb = await window.__firebaseReady;
+    const app = syncFb.initializeApp(FIREBASE_CONFIG);
+    syncDb = syncFb.getFirestore(app);
+    syncActive = true;
+
+    SYNC_COLLECTIONS.forEach(name => {
+      const arr = { inventory, lots, soldArchive, packedBoxes, savedQuotes }[name];
+      const snap = new Map();
+      arr.forEach(item => snap.set(String(item.id), JSON.stringify(item)));
+      syncSnapshots[name] = snap;
+
+      const colRef = syncFb.collection(syncDb, 'workspaces', workspaceCode, name);
+      const unsub = syncFb.onSnapshot(colRef, (snapshot) => {
+        applyRemoteChanges(name, snapshot);
+      }, (err) => {
+        console.error('sync listen error', name, err);
+        setSyncStatus('Connection error - check the workspace code and your connection', 'warn');
+      });
+      syncUnsubscribers.push(unsub);
+    });
+
+    // push anything local-only up (e.g. first time connecting this device)
+    queueSyncPush('inventory', inventory, 'id');
+    queueSyncPush('lots', lots, 'id');
+    queueSyncPush('soldArchive', soldArchive, 'id');
+    queueSyncPush('packedBoxes', packedBoxes, 'id');
+    queueSyncPush('savedQuotes', savedQuotes, 'id');
+
+    setSyncStatus('Connected - syncing live', 'good');
+  } catch (err) {
+    console.error('sync start failed', err);
+    setSyncStatus('Could not connect - check the workspace code and your connection', 'warn');
+  }
+}
+
+async function syncPricesNow(){
+  if (!syncActive || !syncDb) { showToast('Connect Cloud Sync first.', 3000); return; }
+  const btn = document.getElementById('sync-prices-btn');
+  if (btn) btn.disabled = true;
+  showToast('Syncing prices with cloud...', 20000);
+  try {
+    const fb = syncFb;
+    const chunkColRef = fb.collection(syncDb, 'workspaces', workspaceCode, 'priceChunks');
+
+    const snap = await fb.getDocs(chunkColRef);
+    let remoteOverrides = {};
+    let remoteCleared = {};
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.overrides) Object.assign(remoteOverrides, data.overrides);
+      if (data.cleared) Object.assign(remoteCleared, data.cleared);
+    });
+    const pullResult = mergePriceOverrides(remoteOverrides, remoteCleared);
+
+    const keys = Object.keys(priceOverrides);
+    const CHUNK_SIZE = 400;
+    const numChunks = Math.max(1, Math.ceil(keys.length / CHUNK_SIZE));
+    const batch = fb.writeBatch(syncDb);
+    for (let i = 0; i < numChunks; i++) {
+      const chunkKeys = keys.slice(i * CHUNK_SIZE, (i+1) * CHUNK_SIZE);
+      const chunkOverrides = {};
+      chunkKeys.forEach(k => chunkOverrides[k] = priceOverrides[k]);
+      const ref = fb.doc(syncDb, 'workspaces', workspaceCode, 'priceChunks', 'chunk' + i);
+      batch.set(ref, { overrides: chunkOverrides, cleared: i === 0 ? clearedOverrides : {}, updatedAt: new Date().toISOString() });
+    }
+    // clean up any extra chunk docs left over from a previous, larger sync
+    snap.forEach(d => {
+      const idx = parseInt(d.id.replace('chunk', ''));
+      if (!isNaN(idx) && idx >= numChunks) batch.delete(d.ref);
+    });
+    await batch.commit();
+
+    renderResults(); renderCheckedStat(); renderDashboardTab();
+    renderPriceOverrideCount(); renderStorageUsage();
+    showToast(`Prices synced: ${pullResult.applied} pulled from cloud (${pullResult.kept} kept as newer), ${keys.length} total now on both devices.`, 6500);
+  } catch (err) {
+    console.error('price sync failed', err);
+    showToast('Price sync failed - check your connection.', 5000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+document.getElementById('connect-sync-btn').addEventListener('click', () => {
+  const input = document.getElementById('workspace-code-input');
+  const code = input.value.trim();
+  if (code.length < 20) { showToast('Workspace code needs to be at least 20 characters.', 4000); return; }
+  startSync(code);
+});
+document.getElementById('disconnect-sync-btn').addEventListener('click', () => {
+  if (!confirm('Disconnect this device from Cloud Sync? Your local data stays put, it just stops syncing live.')) return;
+  stopSync();
+  workspaceCode = null;
+  try { localStorage.removeItem(LS_WORKSPACE_CODE); } catch(e) {}
+});
+document.getElementById('sync-prices-btn').addEventListener('click', syncPricesNow);
 
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 // Search helpers: tolerate punctuation/spacing differences (e.g. "za" finding "Z-A",
@@ -2906,10 +3189,12 @@ let liveScanResolving = false;
 let liveScanSessionCount = 0;
 let liveScanMode = 'cart';
 let liveScanAttachTarget = null;
+let liveScanAttachCallback = null;
 
-async function startLiveScan(mode, attachTarget){
+async function startLiveScan(mode, attachTarget, onAttached){
   liveScanMode = mode || 'cart';
   liveScanAttachTarget = attachTarget || null;
+  liveScanAttachCallback = onAttached || null;
   const backdrop = document.getElementById('live-scan-backdrop');
   const sheet = document.getElementById('live-scan-sheet');
   const statusEl = document.getElementById('live-scan-status');
@@ -3009,12 +3294,11 @@ function handleLiveBarcodeResult(code){
   const statusEl = document.getElementById('live-scan-status');
   if (liveScanMode === 'attach') {
     const target = liveScanAttachTarget;
+    const callback = liveScanAttachCallback;
     setUpcMapping(code, { console: target.console, title: target.title });
-    target.upc = code;
-    saveReceivingSessionState();
     statusEl.className = 'variety-note good';
     statusEl.textContent = `✓ Barcode captured for ${target.title}`;
-    setTimeout(() => { stopLiveScan(); renderReceivingStep(); }, 700);
+    setTimeout(() => { stopLiveScan(); if (callback) callback(code); }, 700);
     return;
   }
   const known = lookupUpc(code);
@@ -3191,7 +3475,11 @@ function renderReceivingStep(){
     });
   });
   const scanBarcodeBtn = document.getElementById('receiving-scan-barcode-btn');
-  if (scanBarcodeBtn) scanBarcodeBtn.addEventListener('click', () => startLiveScan('attach', item));
+  if (scanBarcodeBtn) scanBarcodeBtn.addEventListener('click', () => startLiveScan('attach', item, (code) => {
+    item.upc = code;
+    saveReceivingSessionState();
+    renderReceivingStep();
+  }));
   document.querySelectorAll('#receiving-manual-picker button').forEach(btn => {
     btn.addEventListener('click', () => {
       item.manualIncluded = btn.getAttribute('data-manual-choice') === 'yes';
@@ -3748,6 +4036,11 @@ function renderInventoryTab(){
               </button>
             `).join('')}
           </div>
+
+          <span class="inv-detail-label">Barcode</span>
+          ${(it.upc || findKnownBarcode(it.console, it.title))
+            ? `<div class="variety-note good">&#10003; Barcode on file${it.upc ? ` (${escapeHtml(it.upc)})` : ''}</div>`
+            : `<button class="clear-btn" data-id="${it.id}" data-action="scan-barcode" type="button">&#128247; Scan barcode</button>`}
         </div>` : ''}
       </div>
       <div style="text-align:right;">
@@ -3851,6 +4144,18 @@ function renderInventoryTab(){
       invCaptureItemId = btn.getAttribute('data-id');
       invCaptureSlot = btn.getAttribute('data-slot');
       document.getElementById('inv-photo-input').click();
+    });
+  });
+  listEl.querySelectorAll('[data-action="scan-barcode"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const it = inventory.find(x => x.id === btn.getAttribute('data-id'));
+      if (!it) return;
+      startLiveScan('attach', it, async (code) => {
+        it.upc = code;
+        it.updatedAt = new Date().toISOString();
+        await saveInventory();
+        renderInventoryTab();
+      });
     });
   });
   renderSoldArchive();
@@ -4354,6 +4659,9 @@ document.getElementById('import-prices-input').addEventListener('change', (e) =>
   renderResults();
   renderCart();
   renderDashboardTab();
+  loadWorkspaceCode();
+  if (workspaceCode) startSync(workspaceCode);
+  else setSyncStatus('Not connected', 'neutral');
 })();
 </script>
 <script>
