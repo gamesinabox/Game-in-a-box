@@ -739,6 +739,15 @@
       </label>
     </div>
 
+    <div class="section-title">Price data</div>
+    <div class="settings-card">
+      <p class="settings-hint">For bulk price refreshes (e.g. a PriceCharting export). Only updates prices &mdash; inventory, lots, quotes, and photos are left alone.</p>
+      <label for="import-prices-input" class="clear-btn" style="display:block; text-align:center; cursor:pointer; margin-top:8px;">
+        &#8679; Import prices
+        <input type="file" id="import-prices-input" accept="application/json" style="display:none;">
+      </label>
+    </div>
+
     <div class="section-title">Storage</div>
     <div class="settings-card">
       <p class="settings-hint" id="storage-usage-text">Checking storage usage...</p>
@@ -1654,6 +1663,27 @@ function importData(file){
             upcsAdded + ' learned barcodes, ' + photosAdded + ' condition photos. Nothing was overwritten wholesale.', 6500);
     } catch(err) {
       showToast('Could not read that file - make sure it\'s a Game In A Box backup or catalog-update JSON.', 5000);
+    }
+  };
+  reader.readAsText(file);
+}
+// For a bulk price refresh (e.g. a PriceCharting export) - only touches priceOverrides, so it
+// can't accidentally add inventory, lots, quotes, photos, or bloat the catalog via catalogAdditions.
+function importPricesOnly(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.priceOverrides) {
+        showToast('That file has no priceOverrides to import.', 4000);
+        return;
+      }
+      const priceResult = mergePriceOverrides(data.priceOverrides, data.clearedOverrides);
+      renderResults(); renderCheckedStat(); renderDashboardTab();
+      renderPriceOverrideCount(); renderStorageUsage();
+      showToast(priceResult.applied + ' prices updated, ' + priceResult.kept + ' kept as newer. Nothing else in this file was touched.', 5000);
+    } catch(err) {
+      showToast('Could not read that file - make sure it\'s a valid prices JSON.', 5000);
     }
   };
   reader.readAsText(file);
@@ -4235,6 +4265,11 @@ document.getElementById('export-data-btn').addEventListener('click', exportData)
 document.getElementById('import-file-input').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (file) importData(file);
+  e.target.value = '';
+});
+document.getElementById('import-prices-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) importPricesOnly(file);
   e.target.value = '';
 });
 
