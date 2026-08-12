@@ -206,7 +206,14 @@
     text-align:left;
   }
   .inv-details-toggle .chev{ flex-shrink:0; color:var(--accent); }
-  .inv-details-panel{ margin-top:6px; padding-top:2px; }
+  .inv-details-panel{ margin-top:6px; padding-top:2px; display:flex; flex-direction:column; }
+  .inv-detail-label{
+    font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;
+    color:var(--muted); margin:10px 0 4px;
+  }
+  .inv-detail-label:first-child{ margin-top:2px; }
+  .inv-detail-label .hint{ text-transform:none; font-weight:400; letter-spacing:normal; }
+  .inv-genre-select{ align-self:flex-start; }
   #photo-viewer-backdrop{
     display:none; position:fixed; inset:0; background:rgba(0,0,0,0.88); z-index:80;
     align-items:center; justify-content:center; flex-direction:column; padding:20px;
@@ -242,18 +249,18 @@
     background:var(--field-bg); border:1px solid var(--line); color:var(--ink); font-family:inherit;
     font-size:0.8rem; font-weight:600; padding:7px 12px; border-radius:var(--r-pill); cursor:pointer;
   }
-  .receiving-photo-grid{ display:flex; gap:10px; margin:8px 0 4px; }
-  .receiving-photo-slot{
+  .receiving-photo-grid, .inv-photo-grid{ display:flex; gap:10px; margin:8px 0 4px; }
+  .receiving-photo-slot, .inv-photo-slot{
     flex:1; aspect-ratio:1; border-radius:var(--r-md); border:2px dashed var(--line); background:var(--field-bg);
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
     font-family:inherit; font-size:0.72rem; font-weight:600; color:var(--muted); cursor:pointer;
     overflow:hidden; position:relative; padding:0; text-transform:capitalize;
   }
-  .receiving-photo-slot.filled{ border-style:solid; border-color:var(--accent); }
-  .receiving-photo-slot img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-  .receiving-photo-slot .slot-icon{ font-size:1.4rem; }
-  .receiving-photo-slot .slot-label{ position:relative; z-index:1; }
-  .receiving-photo-slot.filled .slot-label{ background:rgba(0,0,0,0.6); color:#fff; padding:2px 9px; border-radius:999px; }
+  .receiving-photo-slot.filled, .inv-photo-slot.filled{ border-style:solid; border-color:var(--accent); }
+  .receiving-photo-slot img, .inv-photo-slot img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+  .receiving-photo-slot .slot-icon, .inv-photo-slot .slot-icon{ font-size:1.4rem; }
+  .receiving-photo-slot .slot-label, .inv-photo-slot .slot-label{ position:relative; z-index:1; }
+  .receiving-photo-slot.filled .slot-label, .inv-photo-slot.filled .slot-label{ background:rgba(0,0,0,0.6); color:#fff; padding:2px 9px; border-radius:999px; }
   .resume-banner{
     display:flex; align-items:center; gap:10px; background:var(--mid-bg); border:1px solid var(--mid);
     border-radius:var(--r-md); padding:11px 13px; margin-bottom:14px;
@@ -739,6 +746,8 @@
         <div id="storage-usage-bar-fill" style="height:100%; width:0%; background:var(--accent); border-radius:999px;"></div>
       </div>
       <p class="settings-hint" style="margin-top:8px;">If this gets close to full, saves can silently fail. Export a backup, then delete some condition photos from older inventory items to free up room.</p>
+      <p class="settings-hint" id="storage-test-status" style="margin-top:12px;">Not tested yet.</p>
+      <button class="clear-btn" id="storage-test-run-btn" type="button">Run a save/close/reopen test</button>
     </div>
 
     <div class="section-title">Buying</div>
@@ -825,6 +834,7 @@
       <div id="sold-archive-list" style="margin-top:10px;"></div>
     </details>
   </main>
+  <input type="file" id="inv-photo-input" accept="image/*" capture="environment" style="display:none;">
 </div>
 
 <!-- PACK TAB -->
@@ -958,6 +968,8 @@ let quoteTemplateId = 'convenience';
 let cartEditingId = null;
 let invThumbUrls = [];
 let expandedInvIds = new Set();
+let invCaptureItemId = null;
+let invCaptureSlot = null;
 let packThumbUrls = [];
 let receivingSession = null;
 let receivingCaptureSlot = null;
@@ -3201,6 +3213,27 @@ document.getElementById('receiving-photo-input').addEventListener('change', asyn
     showToast("Couldn't save that photo - storage may be full. Export a backup and free up space in Settings.", 5000);
   }
 });
+document.getElementById('inv-photo-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const itemId = invCaptureItemId, slot = invCaptureSlot; // capture now - these can change during the await below
+  e.target.value = '';
+  if (!file || !itemId || !slot) return;
+  const it = inventory.find(x => x.id === itemId);
+  if (!it) return;
+  if (!it.photos) it.photos = { front: null, back: null, disc: null };
+  const oldPhotoId = it.photos[slot];
+  try {
+    const newPhotoId = await capturePhotoForSlot(file);
+    it.photos[slot] = newPhotoId;
+    it.updatedAt = new Date().toISOString();
+    if (oldPhotoId) await deletePhotoBlob(oldPhotoId);
+    await saveInventory();
+    renderInventoryTab();
+  } catch(err) {
+    console.error('photo save failed', err);
+    showToast("Couldn't save that photo - storage may be full. Export a backup and free up space in Settings.", 5000);
+  }
+});
 
 function generateFriendQuoteText(){
   const total = cart.reduce((s,c) => s + (parseFloat(c.price)||0), 0);
@@ -3354,10 +3387,37 @@ async function renderStorageUsage(){
     textEl.textContent = "Couldn't check storage usage right now.";
   }
 }
+const LS_STORAGE_TEST = 'loosecart_storage_test_marker';
+// Reads/writes localStorage directly (not through lsGet/lsSet) so this is a check of the real
+// browser/OS storage layer, independent of this app's own in-memory fallback logic.
+function renderStorageTestStatus(){
+  const el = document.getElementById('storage-test-status');
+  if (!el) return;
+  let raw = null;
+  try { raw = localStorage.getItem(LS_STORAGE_TEST); } catch(e) {}
+  if (!raw) {
+    el.textContent = 'Not tested yet. Tap the button below, then fully close this app (swipe it away in your app switcher, not just background it), reopen it, and come back to this screen.';
+    return;
+  }
+  try {
+    const marker = JSON.parse(raw);
+    el.innerHTML = `Marker on file from <strong>${new Date(marker.at).toLocaleString('en-AU')}</strong>. If that time is from before your last close-and-reopen, storage is surviving fine on this device. Run it again any time to re-test.`;
+  } catch(e) { el.textContent = 'Could not read the test marker.'; }
+}
+document.getElementById('storage-test-run-btn').addEventListener('click', () => {
+  try {
+    localStorage.setItem(LS_STORAGE_TEST, JSON.stringify({at: new Date().toISOString()}));
+    showToast('Marker saved directly to storage. Now fully close this app and reopen it, then check this screen again.', 7000);
+  } catch(e) {
+    showToast('Could not write to storage at all: ' + (e && e.message ? e.message : e), 6000);
+  }
+  renderStorageTestStatus();
+});
 document.getElementById('open-settings-btn').addEventListener('click', () => {
   document.getElementById('settings-sheet').style.display = 'flex';
   document.getElementById('settings-backdrop').style.display = 'block';
   renderStorageUsage();
+  renderStorageTestStatus();
 });
 document.getElementById('close-settings').addEventListener('click', closeSettingsSheet);
 document.getElementById('settings-backdrop').addEventListener('click', closeSettingsSheet);
@@ -3562,28 +3622,35 @@ function renderInventoryTab(){
           ${it.reservedForSolo ? '<span class="edited-badge" style="background:var(--des-uncommon-bg);color:var(--des-uncommon);">reserved solo</span>' : ''}
           ${hindsight ? `<span class="edited-badge" style="background:${hindsight.level==='good'?'var(--good-bg)':'var(--warn-bg)'};color:${hindsight.level==='good'?'var(--good)':'var(--warn)'};">${hindsight.text}</span>` : ''}
         </div>
-        <div class="cr-sub" style="margin-top:3px;">${age === 0 ? 'added today' : age + 'd ago'}${isAging ? ' &middot; <span style="color:var(--warn);font-weight:600;">aging</span>' : ''}${it.lotLabel ? ' &middot; ' + escapeHtml(it.lotLabel) : ''}</div>
-        ${(it.manualIncluded != null || it.receivedBy) ? `<div class="cr-sub" style="margin-top:4px;">
-          ${it.manualIncluded != null ? (it.manualIncluded ? '<span class="edited-badge" style="background:var(--good-bg);color:var(--good);">Manual included</span>' : '<span class="edited-badge" style="background:var(--warn-bg);color:var(--warn);">No manual</span>') : ''}
-          ${it.receivedBy ? `Received by ${escapeHtml(it.receivedBy)}${it.receivedAt ? ' &middot; ' + new Date(it.receivedAt).toLocaleDateString('en-AU') : ''}` : ''}
-        </div>` : ''}
+        <div class="cr-sub" style="margin-top:3px;">
+          ${age === 0 ? 'added today' : age + 'd ago'}${isAging ? ' &middot; <span style="color:var(--warn);font-weight:600;">aging</span>' : ''}${it.lotLabel ? ' &middot; ' + escapeHtml(it.lotLabel) : ''}
+          ${it.manualIncluded != null ? (it.manualIncluded ? ' &middot; <span class="edited-badge" style="background:var(--good-bg);color:var(--good);">Manual included</span>' : ' &middot; <span class="edited-badge" style="background:var(--warn-bg);color:var(--warn);">No manual</span>') : ''}
+          ${it.receivedBy ? ' &middot; received by ' + escapeHtml(it.receivedBy) : ''}
+        </div>
         <button class="inv-details-toggle" data-id="${it.id}" type="button">
           <span>${summaryText}</span><span class="chev">${isExpanded ? '&#9662;' : '&#9656;'}</span>
         </button>
         ${isExpanded ? `<div class="inv-details-panel">
-          <div style="display:flex; align-items:center; gap:5px;">
-            <span style="font-size:0.7rem; color:var(--muted);">Genre</span>
-            <select class="inv-genre-select" data-id="${it.id}" style="font-size:0.76rem; padding:3px 6px;">
-              ${GENRE_OPTIONS.map(gn => `<option value="${gn}" ${(it.genre||'Unsorted')===gn?'selected':''}>${gn}</option>`).join('')}
-            </select>
-          </div>
-          <div style="margin-top:6px;">
+          <span class="inv-detail-label">Genre</span>
+          <select class="inv-genre-select" data-id="${it.id}">
+            ${GENRE_OPTIONS.map(gn => `<option value="${gn}" ${(it.genre||'Unsorted')===gn?'selected':''}>${gn}</option>`).join('')}
+          </select>
+
+          <span class="inv-detail-label">Condition</span>
+          <div>
             ${NOTE_OPTIONS.map(n => `<button class="note-chip${(it.notes||[]).includes(n) ? ' active' : ''}" data-id="${it.id}" data-note="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('')}
           </div>
           <textarea class="inv-condition-note" data-id="${it.id}" placeholder="Condition note (e.g. light scratches)..." rows="1">${escapeHtml(it.conditionNote || '')}</textarea>
-          ${photoCount ? `<div class="inv-photo-row" data-item-id="${it.id}">
-            ${['front','back','disc'].map(slot => it.photos[slot] ? `<img class="inv-photo-thumb" data-photo-id="${it.photos[slot]}" data-slot="${slot}" alt="${slot}">` : '').join('')}
-          </div>` : ''}
+
+          <span class="inv-detail-label">Photos <span class="hint">${photoCount}/3</span></span>
+          <div class="inv-photo-grid" data-item-id="${it.id}">
+            ${['front','back','disc'].map(slot => `
+              <button class="inv-photo-slot${it.photos && it.photos[slot] ? ' filled' : ''}" data-id="${it.id}" data-slot="${slot}" type="button">
+                ${it.photos && it.photos[slot] ? '' : `<span class="slot-icon">&#128247;</span>`}
+                <span class="slot-label">${slot}</span>
+              </button>
+            `).join('')}
+          </div>
         </div>` : ''}
       </div>
       <div style="text-align:right;">
@@ -3668,13 +3735,25 @@ function renderInventoryTab(){
   });
   invThumbUrls.forEach(u => URL.revokeObjectURL(u));
   invThumbUrls = [];
-  listEl.querySelectorAll('.inv-photo-thumb').forEach(img => {
-    const photoId = img.getAttribute('data-photo-id');
-    getPhotoBlob(photoId).then(blob => {
+  listEl.querySelectorAll('.inv-photo-slot.filled').forEach(btn => {
+    const id = btn.getAttribute('data-id');
+    const slot = btn.getAttribute('data-slot');
+    const it = inventory.find(x => x.id === id);
+    if (!it || !it.photos) return;
+    getPhotoBlob(it.photos[slot]).then(blob => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
       invThumbUrls.push(url);
+      const img = document.createElement('img');
       img.src = url;
+      btn.prepend(img);
+    });
+  });
+  listEl.querySelectorAll('.inv-photo-slot').forEach(btn => {
+    btn.addEventListener('click', () => {
+      invCaptureItemId = btn.getAttribute('data-id');
+      invCaptureSlot = btn.getAttribute('data-slot');
+      document.getElementById('inv-photo-input').click();
     });
   });
   renderSoldArchive();
