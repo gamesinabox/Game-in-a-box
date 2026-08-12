@@ -1647,6 +1647,7 @@ function importData(file){
       }
 
       updateNavBadge(); renderResults(); renderCart(); renderInventoryTab(); renderCheckedStat(); renderSavedQuotes(); renderPackTab(); renderDashboardTab();
+      renderPriceOverrideCount(); renderStorageUsage(); // refresh in case Settings (where Import lives) is already open
       showToast('Merged: ' + invResult.added + ' new inventory items, ' + invResult.updated + ' updated, ' +
             priceResult.applied + ' price updates applied (' + priceResult.kept + ' of yours kept as newer), ' +
             lotsAdded + ' new lots, ' + quotesAdded + ' new saved quotes, ' + genresAdded + ' genre tags, ' +
